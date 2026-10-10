@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<SyntaxDefinition name="Luau" extensions=".lua;.luau" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+    <Color name="Comment"  foreground="#6B7085"/>
+    <Color name="String"   foreground="#B4EDC9"/>
+    <Color name="Keyword"  foreground="#C8A1FF" fontWeight="bold"/>
+    <Color name="Builtin"  foreground="#7FD6FF"/>
+    <Color name="Number"   foreground="#FFB08C"/>
+    <Color name="Operator" foreground="#A8ADBD"/>
+    <Color name="Type"     foreground="#8BE9FD"/>
+    <Color name="Punct"    foreground="#6B7085"/>
+
+    <RuleSet ignoreCase="false">
+        <Span color="Comment" begin="--\[\[" end="\]\]" multiline="true"/>
+        <Span color="Comment" begin="--" />
+        <Span color="String" multiline="true">
+            <Begin>"</Begin><End>"</End>
+            <RuleSet>
+                <Span begin="\\" end="." />
+            </RuleSet>
+        </Span>
+        <Span color="String"><Begin>'</Begin><End>'</End></Span>
+        <Span color="String" multiline="true"><Begin>\[\[</Begin><End>\]\]</End></Span>
+
+        <Keywords color="Keyword">
+            <Word>and</Word><Word>break</Word><Word>continue</Word><Word>do</Word><Word>else</Word>
+            <Word>elseif</Word><Word>end</Word><Word>false</Word><Word>for</Word><Word>function</Word>
+            <Word>if</Word><Word>in</Word><Word>local</Word><Word>nil</Word><Word>not</Word><Word>or</Word>
+            <Word>repeat</Word><Word>return</Word><Word>then</Word><Word>true</Word><Word>until</Word>
+            <Word>while</Word><Word>export</Word><Word>type</Word><Word>typeof</Word>
+        </Keywords>
+        <Keywords color="Builtin">
+            <Word>print</Word><Word>warn</Word><Word>error</Word><Word>assert</Word><Word>pcall</Word>
+            <Word>xpcall</Word><Word>select</Word><Word>pairs</Word><Word>ipairs</Word><Word>next</Word>
+            <Word>tostring</Word><Word>tonumber</Word><Word>type</Word><Word>setmetatable</Word>
+            <Word>getmetatable</Word><Word>rawget</Word><Word>rawset</Word><Word>rawequal</Word>
+            <Word>rawlen</Word><Word>require</Word><Word>loadstring</Word><Word>getfenv</Word>
+            <Word>setfenv</Word><Word>unpack</Word>
+            <Word>game</Word><Word>workspace</Word><Word>script</Word><Word>wait</Word><Word>spawn</Word>
+            <Word>task</Word><Word>Instance</Word><Word>Vector3</Word><Word>Vector2</Word><Word>CFrame</Word>
+            <Word>Color3</Word><Word>UDim2</Word><Word>UDim</Word><Word>Enum</Word>
+            <Word>hookfunction</Word><Word>hookmetamethod</Word><Word>newcclosure</Word>
+            <Word>getgenv</Word><Word>getrenv</Word><Word>getsenv</Word>
+            <Word>getrawmetatable</Word><Word>setrawmetatable</Word><Word>setreadonly</Word>
+            <Word>getupvalue</Word><Word>setupvalue</Word><Word>getupvalues</Word>
+            <Word>getconstants</Word><Word>setconstant</Word>
+            <Word>HttpGet</Word><Word>request</Word><Word>readfile</Word><Word>writefile</Word>
+        </Keywords>
+        <Rule color="Number">\b0[xX][0-9a-fA-F]+\b|\b\d+(\.\d+)?([eE][+-]?\d+)?\b</Rule>
+        <Rule color="Operator">[+\-*/%\^#=~&lt;&gt;]|==|~=|&lt;=|&gt;=|\.\.|::</Rule>
+        <Rule color="Punct">[\(\)\[\]\{\},;\.:]</Rule>
+    </RuleSet>
+</SyntaxDefinition>

@@ -1,0 +1,162 @@
+<Window x:Class="RobloxExecutor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:RobloxExecutor.Views"
+        xmlns:vm="clr-namespace:RobloxExecutor.ViewModels"
+        Title="VANTA"
+        Height="720" Width="1180"
+        MinHeight="520" MinWidth="900"
+        Background="Transparent"
+        AllowsTransparency="False"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        WindowStartupLocation="CenterScreen"
+        TextOptions.TextFormattingMode="Ideal"
+        UseLayoutRounding="True"
+        FontFamily="Segoe UI Variable, Segoe UI">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="42"
+                      CornerRadius="12"
+                      GlassFrameThickness="0"
+                      ResizeBorderThickness="6"
+                      UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <Border Background="{DynamicResource Bg0Brush}"
+            CornerRadius="12"
+            BorderBrush="{DynamicResource LineBrush}"
+            BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="42"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="28"/>
+            </Grid.RowDefinitions>
+
+            <!-- title bar -->
+            <Grid Grid.Row="0" Background="Transparent">
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="16,0,0,0">
+                    <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource AccentBrush}">
+                        <TextBlock Text="V" Foreground="White" FontWeight="Bold" FontSize="13"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="VANTA" FontWeight="SemiBold" FontSize="13"
+                               Foreground="{DynamicResource Fg0Brush}"
+                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    <TextBlock Text="executor" FontSize="11"
+                               Foreground="{DynamicResource Fg2Brush}"
+                               VerticalAlignment="Center" Margin="8,2,0,0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button Style="{StaticResource IconButton}" Click="OnMinimize" ToolTip="Minimize">
+                        <Path Data="{StaticResource IcMin}" Stroke="{DynamicResource Fg1Brush}" StrokeThickness="1.6"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButton}" Click="OnMaximize" ToolTip="Maximize">
+                        <Path Data="{StaticResource IcMax}" Stroke="{DynamicResource Fg1Brush}" StrokeThickness="1.4" Fill="Transparent"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButton}" Click="OnClose" ToolTip="Close" Margin="0,0,6,0">
+                        <Path Data="{StaticResource IcClose}" Stroke="{DynamicResource Fg1Brush}" StrokeThickness="1.6"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- body: sidebar + content -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="208"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- sidebar -->
+                <Border Grid.Column="0" Background="{DynamicResource Bg1Brush}"
+                        BorderBrush="{DynamicResource LineSoftBrush}" BorderThickness="0,0,1,0">
+                    <DockPanel LastChildFill="True">
+                        <StackPanel DockPanel.Dock="Bottom" Margin="12,0,12,16">
+                            <Border Style="{StaticResource StatusPill}" HorizontalAlignment="Left" Margin="0,0,0,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                             Fill="{Binding StatusColorBrush}"/>
+                                    <TextBlock Text="{Binding StatusText}" FontSize="11"
+                                               Margin="7,0,0,0" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Fg0Brush}"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="{Binding ProcessInfo}" FontSize="10"
+                                       Foreground="{DynamicResource Fg2Brush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,8,0,0">
+                            <RadioButton Style="{StaticResource NavItem}"
+                                         IsChecked="{Binding IsExecutorActive}"
+                                         GroupName="Nav">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IcExecutor}" Width="18" Height="18"
+                                          Stretch="Uniform"
+                                          Stroke="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}"
+                                          StrokeThickness="1.6" Fill="Transparent"/>
+                                    <TextBlock Text="Executor" Margin="12,0,0,0" FontSize="13"
+                                               VerticalAlignment="Center"
+                                               Foreground="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton Style="{StaticResource NavItem}"
+                                         IsChecked="{Binding IsScriptsActive}"
+                                         GroupName="Nav">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IcScripts}" Width="18" Height="18"
+                                          Stretch="Uniform"
+                                          Stroke="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}"
+                                          StrokeThickness="1.6" Fill="Transparent"/>
+                                    <TextBlock Text="Scripts" Margin="12,0,0,0" FontSize="13"
+                                               VerticalAlignment="Center"
+                                               Foreground="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton Style="{StaticResource NavItem}"
+                                         IsChecked="{Binding IsSettingsActive}"
+                                         GroupName="Nav">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IcSettings}" Width="18" Height="18"
+                                          Stretch="Uniform"
+                                          Stroke="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}"
+                                          StrokeThickness="1.6" Fill="Transparent"/>
+                                    <TextBlock Text="Settings" Margin="12,0,0,0" FontSize="13"
+                                               VerticalAlignment="Center"
+                                               Foreground="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}"/>
+                                </StackPanel>
+                            </RadioButton>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- content -->
+                <ContentControl Grid.Column="1" Content="{Binding CurrentView}"/>
+            </Grid>
+
+            <!-- footer status bar -->
+            <Border Grid.Row="2" Background="{DynamicResource Bg1Brush}"
+                    BorderBrush="{DynamicResource LineSoftBrush}" BorderThickness="0,1,0,0">
+                <Grid>
+                    <TextBlock Text="{Binding FooterLeft}" FontSize="11"
+                               Foreground="{DynamicResource Fg2Brush}"
+                               VerticalAlignment="Center" Margin="14,0,0,0"/>
+                    <TextBlock Text="{Binding FooterRight}" FontSize="11"
+                               Foreground="{DynamicResource Fg2Brush}"
+                               VerticalAlignment="Center" HorizontalAlignment="Right"
+                               Margin="0,0,14,0"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{C3333333-3333-3333-3333-333333333333}</ProjectGuid>
+    <RootNamespace>Bootstrap</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <LanguageStandard>stdcpp20</LanguageStandard>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <LanguageStandard>stdcpp20</LanguageStandard>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level2</WarningLevel>
+      <ConformanceMode>true</ConformanceMode>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>
+        ../third_party/luau/Common/include;
+        ../third_party/luau/Ast/include;
+        ../third_party/luau/Compiler/include;
+        ../third_party/luau/Bytecode/include;
+        ../third_party/luau/Config/include;
+        ../third_party/luau/VM/include;
+        ../third_party/luau/VM/src;
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link><SubSystem>Windows</SubSystem></Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <!-- Bootstrap sources -->
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="pipe_server.cpp" />
+    <ClCompile Include="luau_bridge.cpp" />
+    <ClCompile Include="environment.cpp" />
+    <ClCompile Include="hookfunction.cpp" />
+    <ClCompile Include="scanner.cpp" />
+    <ClCompile Include="rbx_lua.cpp" />
+    <ClCompile Include="env\metatable_closures.cpp" />
+    <ClCompile Include="env\debug_lib.cpp" />
+    <ClCompile Include="env\fs.cpp" />
+    <ClCompile Include="env\net.cpp" />
+    <ClCompile Include="env\instance.cpp" />
+    <ClCompile Include="env\drawing.cpp" />
+    <ClCompile Include="env\misc_cache.cpp" />
+    <ClCompile Include="env\reflection.cpp" />
+    <ClCompile Include="env\cache.cpp" />
+    <ClInclude Include="rbx_lua.h" />
+
+    <!-- Luau Common -->
+    <ClCompile Include="..\third_party\luau\Common\src\BytecodeWire.cpp" />
+    <ClCompile Include="..\third_party\luau\Common\src\StringUtils.cpp" />
+    <ClCompile Include="..\third_party\luau\Common\src\TimeTrace.cpp" />
+
+    <!-- Luau Ast -->
+    <ClCompile Include="..\third_party\luau\Ast\src\Allocator.cpp" />
+    <ClCompile Include="..\third_party\luau\Ast\src\Ast.cpp" />
+    <ClCompile Include="..\third_party\luau\Ast\src\Confusables.cpp" />
+    <ClCompile Include="..\third_party\luau\Ast\src\Cst.cpp" />
+    <ClCompile Include="..\third_party\luau\Ast\src\Lexer.cpp" />
+    <ClCompile Include="..\third_party\luau\Ast\src\Location.cpp" />
+    <ClCompile Include="..\third_party\luau\Ast\src\Parser.cpp" />
+    <ClCompile Include="..\third_party\luau\Ast\src\PrettyPrinter.cpp" />
+
+    <!-- Luau Compiler -->
+    <ClCompile Include="..\third_party\luau\Compiler\src\BuiltinFolding.cpp" />
+    <ClCompile Include="..\third_party\luau\Compiler\src\Builtins.cpp" />
+    <ClCompile Include="..\third_party\luau\Compiler\src\Compiler.cpp" />
+    <ClCompile Include="..\third_party\luau\Compiler\src\ConstantFolding.cpp" />
+    <ClCompile Include="..\third_party\luau\Compiler\src\CostModel.cpp" />
+    <ClCompile Include="..\third_party\luau\Compiler\src\TableShape.cpp" />
+    <ClCompile Include="..\third_party\luau\Compiler\src\Types.cpp" />
+    <ClCompile Include="..\third_party\luau\Compiler\src\ValueTracking.cpp" />
+    <ClCompile Include="..\third_party\luau\Compiler\src\lcode.cpp" />
+
+    <!-- Luau Bytecode -->
+    <ClCompile Include="..\third_party\luau\Bytecode\src\BytecodeBuilder.cpp" />
+    <ClCompile Include="..\third_party\luau\Bytecode\src\BytecodeDump.cpp" />
+    <ClCompile Include="..\third_party\luau\Bytecode\src\BytecodeGraph.cpp" />
+    <ClCompile Include="..\third_party\luau\Bytecode\src\Sccp.cpp" />
+
+    <!-- Luau Config -->
+    <ClCompile Include="..\third_party\luau\Config\src\Config.cpp" />
+    <ClCompile Include="..\third_party\luau\Config\src\LinterConfig.cpp" />
+    <ClCompile Include="..\third_party\luau\Config\src\LuauConfig.cpp" />
+
+    <!-- Luau VM -->
+    <ClCompile Include="..\third_party\luau\VM\src\lapi.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\laux.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lbaselib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lbitlib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lbuffer.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lbuflib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lbuiltins.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lclass.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lclasslib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lcorolib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\ldblib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\ldebug.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\ldo.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lfunc.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lgc.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lgcdebug.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\linit.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lintlib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lmathlib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lmem.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lnumprint.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lobject.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\loslib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lperf.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lstate.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lstring.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lstrlib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\ltable.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\ltablib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\ltm.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\ludata.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lutf8lib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lveclib.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lvector.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lvmexecute.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lvmload.cpp" />
+    <ClCompile Include="..\third_party\luau\VM\src\lvmutils.cpp" />
+
+    <ClInclude Include="pipe_server.h" />
+    <ClInclude Include="luau_bridge.h" />
+    <ClInclude Include="environment.h" />
+    <ClInclude Include="hookfunction.h" />
+    <ClInclude Include="scanner.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

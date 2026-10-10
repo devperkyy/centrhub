@@ -1,0 +1,38 @@
+<UserControl x:Class="RobloxExecutor.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource Bg0Brush}">
+    <Grid Margin="18">
+        <StackPanel>
+            <TextBlock Text="Settings" FontSize="20" FontWeight="SemiBold"
+                       Foreground="{DynamicResource Fg0Brush}"/>
+            <TextBlock Text="injection + runtime" FontSize="12"
+                       Foreground="{DynamicResource Fg2Brush}" Margin="0,4,0,16"/>
+
+            <Border Background="{DynamicResource Bg1Brush}" CornerRadius="10"
+                    BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" Padding="18">
+                <StackPanel>
+                    <TextBlock Text="Target process" FontSize="11" Foreground="{DynamicResource Fg2Brush}"/>
+                    <TextBox Text="{Binding TargetProcess}" Background="Transparent" BorderThickness="0,0,0,1"
+                             BorderBrush="{DynamicResource LineBrush}"
+                             Foreground="{DynamicResource Fg0Brush}" FontSize="13" Margin="0,4,0,16"/>
+
+                    <TextBlock Text="Pipe name" FontSize="11" Foreground="{DynamicResource Fg2Brush}"/>
+                    <TextBox Text="{Binding PipeName}" Background="Transparent" BorderThickness="0,0,0,1"
+                             BorderBrush="{DynamicResource LineBrush}"
+                             Foreground="{DynamicResource Fg0Brush}" FontSize="13" Margin="0,4,0,16"/>
+
+                    <TextBlock Text="Bootstrap DLL path" FontSize="11" Foreground="{DynamicResource Fg2Brush}"/>
+                    <TextBox Text="{Binding BootstrapPath}" Background="Transparent" BorderThickness="0,0,0,1"
+                             BorderBrush="{DynamicResource LineBrush}"
+                             Foreground="{DynamicResource Fg0Brush}" FontSize="13" Margin="0,4,0,16"/>
+
+                    <CheckBox Content="Manual-map (hide from PEB module list)" IsChecked="{Binding ManualMap}"
+                              Foreground="{DynamicResource Fg0Brush}" Margin="0,0,0,8"/>
+                    <CheckBox Content="Auto re-attach when target reopens" IsChecked="{Binding AutoReattach}"
+                              Foreground="{DynamicResource Fg0Brush}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Grid>
+</UserControl>

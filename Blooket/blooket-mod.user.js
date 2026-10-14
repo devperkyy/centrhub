@@ -23,14 +23,19 @@
   // FILL: state -> number
   // FILL: (id, level) => redux action object
   // FILL: (n) => redux action object
+  // FILL: state -> { id, answerIndex } for the active solo question, or null
   const HOOKS = {
     getTowers: s => [],
     getTokens: s => 0,
+    getQuestion: s => null,
     setTowerLevel: null,
     setTokens: null,
   };
 
-  const DEFAULTS = { tokenAmount: 999999, auto: false, autoTokens: false, scanDepth: 8 };
+  const DEFAULTS = {
+    tokenAmount: 999999, auto: false, autoTokens: false, scanDepth: 8,
+    autoAnswer: false, answerDelay: 1200, answerJitter: 800, choiceSelector: '',
+  };
   const CFG_KEY = 'dolp-blooket-cfg';
   const POS_KEY = 'dolp-blooket-pos';
   const cfg = { ...DEFAULTS };
@@ -110,6 +115,23 @@
     store.dispatch(HOOKS.setTokens(Number(cfg.tokenAmount) || DEFAULTS.tokenAmount));
   }
 
+  // answers the active solo question by clicking the choice at answerIndex.
+  // choiceSelector must match the answer buttons in DOM order.
+  let lastQuestion = null;
+  function autoAnswer() {
+    if (!store || !HOOKS.getQuestion) return;
+    const q = HOOKS.getQuestion(store.getState());
+    if (!q || q.answerIndex == null) return;
+    const key = q.id ?? q.answerIndex;
+    if (key === lastQuestion) return;
+    lastQuestion = key;
+    if (!cfg.choiceSelector) return log('autoAnswer: choiceSelector is empty. set it in the menu.');
+    const el = document.querySelectorAll(cfg.choiceSelector)[q.answerIndex];
+    if (!el) return log(`autoAnswer: no choice at index ${q.answerIndex} for "${cfg.choiceSelector}"`);
+    const wait = Number(cfg.answerDelay) + Math.random() * Number(cfg.answerJitter);
+    setTimeout(() => el.click(), wait);
+  }
+
   // menu
   const panel = document.createElement('div');
   panel.style.cssText = 'position:fixed;top:80px;left:20px;z-index:2147483647;width:340px;' +
@@ -125,6 +147,10 @@
       <label>amount <input data-cfg="tokenAmount" type="number" style="width:90px"></label>
       <label><input type="checkbox" data-cfg="auto"> auto max</label>
       <label><input type="checkbox" data-cfg="autoTokens"> auto tokens</label>
+      <label><input type="checkbox" data-cfg="autoAnswer"> auto answer (solo)</label>
+      <label>delay ms <input data-cfg="answerDelay" type="number" style="width:70px"></label>
+      <label>jitter ms <input data-cfg="answerJitter" type="number" style="width:70px"></label>
+      <label style="width:100%">choice selector <input data-cfg="choiceSelector" type="text" style="width:200px"></label>
       <label>scan depth <input data-cfg="scanDepth" type="number" min="1" max="20" style="width:50px"></label>
     </div>
     <div style="padding:0 8px 8px;display:flex;gap:6px">
@@ -152,7 +178,7 @@
   for (const el of panel.querySelectorAll('[data-cfg]')) {
     el.onchange = () => {
       const k = el.dataset.cfg;
-      cfg[k] = el.type === 'checkbox' ? el.checked : Number(el.value);
+      cfg[k] = el.type === 'checkbox' ? el.checked : el.type === 'text' ? el.value : Number(el.value);
       saveCfg();
     };
   }
@@ -249,6 +275,7 @@
     setInterval(() => {
       if (cfg.auto && HOOKS.setTowerLevel) applyMax();
       if (cfg.autoTokens && HOOKS.setTokens) applyTokens();
+      if (cfg.autoAnswer) autoAnswer();
       refreshStatus();
     }, 1000);
   }, 500);

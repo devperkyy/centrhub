@@ -233,16 +233,52 @@
   // ---------- store ----------
   let store = null;
 
+  // redux-like store: has getState and dispatch
+  const isStore = o => !!o && typeof o.getState === 'function' && typeof o.dispatch === 'function';
+
+  // checks a fiber's props and hook state, one level deep, for a store
+  function storeOnFiber(f) {
+    const p = f.memoizedProps;
+    if (p && typeof p === 'object') {
+      for (const v of Object.values(p)) {
+        if (isStore(v)) return v;
+        if (v && typeof v === 'object' && isStore(v.store)) return v.store;
+        if (v && typeof v === 'object' && isStore(v.value)) return v.value;
+      }
+    }
+    for (let h = f.memoizedState; h; h = h.next) {
+      const m = h.memoizedState;
+      if (isStore(m)) return m;
+      if (m && typeof m === 'object' && isStore(m.store)) return m.store;
+    }
+    return null;
+  }
+
   function findStore() {
     for (const el of document.querySelectorAll('body *')) {
       const k = Object.keys(el).find(x => x.startsWith('__reactFiber$'));
       if (!k) continue;
       for (let f = el[k]; f; f = f.return) {
-        const s = f.memoizedProps && f.memoizedProps.store;
-        if (s && typeof s.getState === 'function' && typeof s.dispatch === 'function') return s;
+        const s = storeOnFiber(f);
+        if (s) return s;
       }
     }
     return null;
+  }
+
+  // one-time report when no store is found, pasted into the log box
+  function diagnose() {
+    const el = [...document.querySelectorAll('body *')].find(e => Object.keys(e).some(x => x.startsWith('__reactFiber$')));
+    if (!el) return print('diag: no react fiber on any element. page may not be react, or not rendered yet');
+    const k = Object.keys(el).find(x => x.startsWith('__reactFiber$'));
+    const names = [];
+    for (let f = el[k]; f && names.length < 25; f = f.return) {
+      const t = f.type;
+      names.push(typeof t === 'string' ? t : (t && (t.displayName || t.name)) || '?');
+    }
+    print('diag: fiber chain ' + names.join(' > '));
+    const globals = ['__REDUX_DEVTOOLS_EXTENSION__', '__NEXT_DATA__', '__APOLLO_STATE__'].filter(g => window[g]);
+    print('diag: globals ' + (globals.join(', ') || 'none'));
   }
 
   function wrapDispatch() {
@@ -440,9 +476,13 @@
   };
 
   // store isn't mounted at document-idle on every page, so poll for it
+  let tries = 0;
   const find = setInterval(() => {
     store = findStore();
-    if (!store) return;
+    if (!store) {
+      if (++tries === 20) { print('no store after 10s'); diagnose(); }
+      return;
+    }
     clearInterval(find);
     wrapDispatch();
     dot.classList.add('ok');

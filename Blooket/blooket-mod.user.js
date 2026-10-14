@@ -133,6 +133,7 @@
       <button data-act="reset">RESET CFG</button>
     </div>
     <textarea data-cfgbox spellcheck="false" style="display:block;box-sizing:border-box;width:calc(100% - 16px);margin:0 8px 8px;height:60px;background:#0e0e12;color:#e6e6ee;border:1px solid #333"></textarea>
+    <div data-status style="padding:6px 8px;border-top:1px solid #333;color:#9a9ab0">status: waiting for store</div>
     <pre data-out style="margin:0;padding:8px;height:160px;overflow:auto;border-top:1px solid #333;white-space:pre-wrap"></pre>`;
   document.body.appendChild(panel);
 
@@ -223,6 +224,22 @@
     if (e.key === 'F8') { e.preventDefault(); doScan(); }
   });
 
+  // live status: token count and tower levels, once the hooks are filled
+  const statusEl = panel.querySelector('[data-status]');
+  const refreshStatus = () => {
+    if (!store) return;
+    const parts = [];
+    try {
+      if (HOOKS.getTokens) parts.push(`tokens ${HOOKS.getTokens(store.getState())}`);
+      if (HOOKS.getTowers) {
+        const towers = HOOKS.getTowers(store.getState());
+        const maxed = towers.filter(t => t.level >= t.maxLevel).length;
+        parts.push(`towers ${towers.length} (${maxed} maxed)`);
+      }
+    } catch (e) { parts.push(`hook error: ${e.message}`); }
+    statusEl.textContent = parts.length ? 'status: ' + parts.join(' | ') : 'status: hooks not filled';
+  };
+
   // store isn't mounted at document-idle on every page, so poll for it
   const timer = setInterval(() => {
     store = findStore();
@@ -232,6 +249,7 @@
     setInterval(() => {
       if (cfg.auto && HOOKS.setTowerLevel) applyMax();
       if (cfg.autoTokens && HOOKS.setTokens) applyTokens();
+      refreshStatus();
     }, 1000);
   }, 500);
 })();

@@ -38,6 +38,7 @@
     autoHealth: false,
     roundTarget: 1,
     towerMax: 0,
+    watchState: false,
     force2x: false,
     autoNext: false,
     autoMax: false,
@@ -189,6 +190,7 @@
       <div class="dolp-card"><h4>state</h4>
         <div class="dolp-btns">${btn('scan', 'scan [F8]')} ${btn('dump', 'dump to clipboard')} ${btn('hookTest', 'hook test')} ${btn('scanFibers', 'scan components')}</div>
         ${sw('logDispatch', 'log dispatched actions')}
+        ${sw('watchState', 'log game state changes')}
         ${num('scanDepth', 'scan depth')}
       </div>
     </div>
@@ -593,6 +595,20 @@
     toast('question counted correct', 'ok');
   }
 
+  // logs every change in the game's state (and tower count) to the log box,
+  // so clicking a shop tile shows exactly which fields the game touches
+  let prevState = null;
+  function watchState(g) {
+    const cur = { towers: Array.isArray(g.towers) ? g.towers.length : '-' };
+    for (const [k, v] of Object.entries(g.state)) cur[k] = v && typeof v === 'object' ? brief(v) : v;
+    if (prevState) {
+      for (const k of Object.keys(cur)) {
+        if (cur[k] !== prevState[k]) print(`${k}: ${prevState[k]} -> ${cur[k]}`);
+      }
+    }
+    prevState = cur;
+  }
+
   // clicks the "Next Round" button when it is on screen
   let lastNext = 0;
   const ownText = e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('');
@@ -811,6 +827,7 @@
     if (cfg.autoHealth) setHealth(cfg.healthAmount, true);
     if (cfg.force2x && g && !g.state.doubleSpeed) g.setState({ doubleSpeed: true });
     if (cfg.autoNext) clickNext();
+    if (cfg.watchState && g) watchState(g); else prevState = null;
     if (cfg.autoAnswer) autoAnswer(true);
     refreshStatus();
   }, 500);

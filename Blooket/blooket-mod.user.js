@@ -188,7 +188,7 @@
 
     <div class="dolp-page" data-page="misc">
       <div class="dolp-card"><h4>state</h4>
-        <div class="dolp-btns">${btn('scan', 'scan [F8]')} ${btn('dump', 'dump to clipboard')} ${btn('hookTest', 'hook test')} ${btn('scanFibers', 'scan components')}</div>
+        <div class="dolp-btns">${btn('scan', 'scan [F8]')} ${btn('dump', 'dump to clipboard')} ${btn('hookTest', 'hook test')} ${btn('scanFibers', 'scan components')} ${btn('traceBuy', 'trace buy / upgrade')}</div>
         ${sw('logDispatch', 'log dispatched actions')}
         ${sw('watchState', 'log game state changes')}
         ${num('scanDepth', 'scan depth')}
@@ -474,9 +474,8 @@
     if (g) {
       const mirrors = moneyFields(g);
       g.setState({ tokens: n });
-      for (const m of mirrors) m.o[m.k] = n;
       if (!quiet) {
-        print(`money fields outside state: ${mirrors.map(m => m.path).join(', ') || 'none'}`);
+        print(`money-named fields outside state (not written): ${mirrors.map(m => m.path).join(', ') || 'none'}`);
         setTimeout(() => print(`tokens after set: ${g.state.tokens}`), 150);
       }
       return quiet || toast(`tokens set to ${n}`, 'ok');
@@ -639,6 +638,39 @@
     prevState = cur;
   }
 
+  // wraps the game's tower/buy/upgrade-looking methods so each call, its
+  // arguments and its return value are logged, and turns the state logger on.
+  // click a shop tile and the map afterwards and read the log
+  let tracedFor = null;
+  function traceMethods() {
+    const g = needGame();
+    if (!g) return;
+    if (tracedFor !== g) {
+      const re = /tower|upgrade|buy|sell|place|afford|cost|token|purchase/i;
+      const show = x => (typeof x === 'function' ? 'fn' : brief(x)).slice(0, 120);
+      const names = new Set([...Object.getOwnPropertyNames(Object.getPrototypeOf(g)), ...Object.keys(g)]);
+      const wrapped = [];
+      for (const k of names) {
+        let orig;
+        try { orig = g[k]; } catch (_) { continue; }
+        if (!re.test(k) || typeof orig !== 'function' || k === 'setState' || k === 'forceUpdate') continue;
+        g[k] = function (...a) {
+          print(`call ${k}(${a.map(show).join(', ')})`);
+          const r = orig.apply(this, a);
+          print(`${k} -> ${show(r)}`);
+          return r;
+        };
+        wrapped.push(k);
+      }
+      tracedFor = g;
+      print(`tracing: ${wrapped.join(', ') || 'no matching methods'}`);
+      if (typeof g.forceUpdate === 'function') g.forceUpdate();
+    }
+    cfg.watchState = true;
+    saveCfg(); syncFields();
+    toast('tracing on. click a tile, then the map', 'ok');
+  }
+
   // clicks the "Next Round" button when it is on screen
   let lastNext = 0;
   const ownText = e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('');
@@ -760,6 +792,7 @@
     setHealth: () => setHealth(cfg.healthAmount),
     setRound: () => setRound(cfg.roundTarget),
     skipRound, revive, togglePause, toggleSpeed, skipQuestion, learnMax, inspectTowers,
+    traceBuy: traceMethods,
     addTokens,
     answerNow: () => autoAnswer(false, true),
     scan: doScan,

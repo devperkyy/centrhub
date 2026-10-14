@@ -474,8 +474,10 @@
     if (g) {
       const mirrors = moneyFields(g);
       g.setState({ tokens: n });
+      // the game subtracts purchases from stats.tokens, not from state.tokens, so both are set
+      for (const m of mirrors) m.o[m.k] = n;
       if (!quiet) {
-        print(`money-named fields outside state (not written): ${mirrors.map(m => m.path).join(', ') || 'none'}`);
+        print(`also set: ${mirrors.map(m => m.path).join(', ') || 'nothing else found'}`);
         setTimeout(() => print(`tokens after set: ${g.state.tokens}`), 150);
       }
       return quiet || toast(`tokens set to ${n}`, 'ok');
@@ -490,7 +492,7 @@
     const step = Number(cfg.tokenStep) || 0;
     const g = getGame();
     if (g) {
-      g.setState(s => ({ tokens: s.tokens + step }));
+      setTokens(g.state.tokens + step, true);
       return toast(`+${step} tokens`, 'ok');
     }
     if (!store) return toast('game not found. start a round first', 'bad');

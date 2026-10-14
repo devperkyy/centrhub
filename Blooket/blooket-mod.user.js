@@ -159,7 +159,7 @@
 
     <div class="dolp-page" data-page="misc">
       <div class="dolp-card"><h4>state</h4>
-        <div class="dolp-btns">${btn('scan', 'scan [F8]')} ${btn('dump', 'dump to clipboard')} ${btn('hookTest', 'hook test')}</div>
+        <div class="dolp-btns">${btn('scan', 'scan [F8]')} ${btn('dump', 'dump to clipboard')} ${btn('hookTest', 'hook test')} ${btn('scanFibers', 'scan components')}</div>
         ${sw('logDispatch', 'log dispatched actions')}
         ${num('scanDepth', 'scan depth')}
       </div>
@@ -279,6 +279,83 @@
     print('diag: fiber chain ' + names.join(' > '));
     const globals = ['__REDUX_DEVTOOLS_EXTENSION__', '__NEXT_DATA__', '__APOLLO_STATE__'].filter(g => window[g]);
     print('diag: globals ' + (globals.join(', ') || 'none'));
+    print('diag: no redux store here. misc tab > "scan components", then paste the copied text');
+  }
+
+  // react exposes its root through any element's fiber; walk up to the top
+  function fiberRoot() {
+    for (const el of document.querySelectorAll('body *')) {
+      const k = Object.keys(el).find(x => x.startsWith('__reactFiber$'));
+      if (!k) continue;
+      let f = el[k];
+      while (f.return) f = f.return;
+      return f;
+    }
+    return null;
+  }
+
+  function* fibers(root) {
+    const stack = [root];
+    while (stack.length) {
+      const f = stack.pop();
+      yield f;
+      if (f.sibling) stack.push(f.sibling);
+      if (f.child) stack.push(f.child);
+    }
+  }
+
+  const INTEREST = /token|coin|gold|cash|money|tower|level|health|hp|wave|round|lives|upgrade|question|answer|correct/i;
+  const compName = f => {
+    const t = f.type;
+    return typeof t === 'string' ? t : (t && (t.displayName || t.name)) || '?';
+  };
+  const brief = v => {
+    if (v === null || typeof v !== 'object') return String(v);
+    return '{' + Object.keys(v).slice(0, 20).map(k => {
+      const x = v[k];
+      return typeof x === 'number' || typeof x === 'boolean'
+        ? `${k}=${x}` : `${k}:${Array.isArray(x) ? 'array' + x.length : typeof x}`;
+    }).join(', ') + '}';
+  };
+
+  // lists where the game keeps its state: class component state, props and
+  // hook values that look like tokens / towers / levels. copies it for pasting
+  function scanFibers() {
+    const root = fiberRoot();
+    if (!root) return print('no react fiber found');
+    const cls = [], props = [], hooks = [];
+    for (const f of fibers(root)) {
+      if (typeof f.type === 'string') continue;
+      const name = compName(f);
+      const inst = f.stateNode;
+      const isClass = inst && typeof inst === 'object' && inst.state && typeof inst.setState === 'function';
+      if (isClass) cls.push(`[class ${name}] state ${brief(inst.state)}`);
+      const p = f.memoizedProps;
+      if (p && typeof p === 'object') {
+        for (const k of Object.keys(p)) {
+          if (INTEREST.test(k)) props.push(`[props ${name}] ${k} = ${brief(p[k])}`);
+        }
+      }
+      if (isClass) continue;
+      let i = 0;
+      for (let h = f.memoizedState; h && typeof h === 'object' && 'next' in h; h = h.next, i++) {
+        const v = h.memoizedState;
+        if (typeof v === 'number') hooks.push(`[hook ${name}#${i}] ${v}`);
+        else if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).some(k => INTEREST.test(k))) {
+          hooks.push(`[hook ${name}#${i}] ${brief(v)}`);
+        }
+      }
+    }
+    const lines = [...new Set([...cls, ...props, ...hooks])].slice(0, 300);
+    const text = lines.join('\n');
+    window.__dolpScan = text;
+    print(`component scan: ${cls.length} class, ${props.length} props, ${hooks.length} hooks`);
+    print(lines.slice(0, 10).join('\n'));
+    const clip = navigator.clipboard && navigator.clipboard.writeText;
+    if (!clip) return print('no clipboard api. full scan on window.__dolpScan');
+    navigator.clipboard.writeText(text).then(
+      () => { print('full scan copied. paste it into chat'); toast('scan copied', 'ok'); },
+      () => print('clipboard denied. full scan on window.__dolpScan'));
   }
 
   function wrapDispatch() {
@@ -408,6 +485,7 @@
     scan: doScan,
     dump: doDump,
     hookTest,
+    scanFibers,
     export: () => { cfgBox.value = JSON.stringify(cfg, null, 2); print('config exported to box'); },
     import: () => {
       try {

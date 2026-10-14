@@ -36,6 +36,9 @@
     tokenStep: 1000,
     healthAmount: 100,
     autoHealth: false,
+    roundTarget: 1,
+    force2x: false,
+    autoNext: false,
     autoMax: false,
     autoTokens: false,
     autoAnswer: false,
@@ -128,6 +131,7 @@
     <div id="dolp-tabs">
       <button class="dolp-tab" data-tab="towers">towers</button>
       <button class="dolp-tab" data-tab="economy">economy</button>
+      <button class="dolp-tab" data-tab="game">game</button>
       <button class="dolp-tab" data-tab="solo">solo</button>
       <button class="dolp-tab" data-tab="misc">misc</button>
       <button class="dolp-tab" data-tab="config">config</button>
@@ -151,6 +155,21 @@
         ${num('tokenStep', 'step')}
         <div class="dolp-btns">${btn('setTokens', 'set [F7]')} ${btn('addTokens', '+ step')}</div>
         ${sw('autoTokens', 'auto set every second')}
+      </div>
+    </div>
+
+    <div class="dolp-page" data-page="game">
+      <div class="dolp-card"><h4>rounds</h4>
+        ${num('roundTarget', 'round')}
+        <div class="dolp-btns">${btn('setRound', 'set round')} ${btn('skipRound', 'skip round')} ${btn('revive', 'revive')}</div>
+        ${sw('autoNext', 'auto next round')}
+      </div>
+      <div class="dolp-card"><h4>speed</h4>
+        <div class="dolp-btns">${btn('togglePause', 'pause / resume')} ${btn('toggleSpeed', 'toggle 2x')}</div>
+        ${sw('force2x', 'keep 2x speed on')}
+      </div>
+      <div class="dolp-card"><h4>questions (solo)</h4>
+        <div class="dolp-btns">${btn('skipQuestion', 'skip question')}</div>
       </div>
     </div>
 
@@ -342,6 +361,9 @@
           const v = inst.state[k];
           if (v && typeof v === 'object') cls.push(`[state ${name}.${k}] ${brief(v)}`);
         }
+        if (typeof inst.state.tokens === 'number') {
+          for (const h of deepFind(inst, /level|lvl|tier|upgrade|damage|range/i)) cls.push(`[deep ${name}] ${h}`);
+        }
         const skip = ['props', 'context', 'refs', 'updater', 'state', '_reactInternals', '_reactInternalInstance'];
         const own = Object.keys(inst).filter(k => !skip.includes(k)).slice(0, 40);
         if (own.length) {
@@ -393,8 +415,9 @@
 
   // ---------- features (quiet = called from the tick loop, no toasts) ----------
   function maxTowers(quiet = false) {
-    if (!store) return quiet || toast('no store yet', 'bad');
-    if (!HOOKS.setTowerLevel) return quiet || toast('towers hook not filled', 'bad');
+    if (!store || !HOOKS.setTowerLevel) {
+      return quiet || toast('tower data not located yet. place towers, misc > scan components, paste it', 'bad');
+    }
     let n = 0;
     for (const t of HOOKS.getTowers(state())) {
       if (t.level < t.maxLevel) { store.dispatch(HOOKS.setTowerLevel(t.id, t.maxLevel)); n++; }
@@ -451,6 +474,104 @@
     if (!g) return quiet || toast('game not found. start a round first', 'bad');
     g.setState({ health: Number(amount) || 0 });
     if (!quiet) toast(`health set to ${amount}`, 'ok');
+  }
+
+  const needGame = () => {
+    const g = getGame();
+    if (!g) toast('game not found. start a round first', 'bad');
+    return g;
+  };
+
+  function setRound(n) {
+    const g = needGame();
+    if (!g) return;
+    const r = Number(n) || 1;
+    g.setState({ round: r });
+    toast(`round set to ${r}`, 'ok');
+  }
+
+  function skipRound() {
+    const g = needGame();
+    if (!g) return;
+    const next = g.state.round + 1;
+    g.setState({ round: next, roundCompleted: true });
+    toast(`round ${next}`, 'ok');
+  }
+
+  function revive() {
+    const g = needGame();
+    if (!g) return;
+    g.setState({ gameOver: false, health: Math.max(g.state.health, Number(cfg.healthAmount) || 100) });
+    toast('revived', 'ok');
+  }
+
+  function togglePause() {
+    const g = needGame();
+    if (!g) return;
+    const was = g.state.paused;
+    g.setState(s => ({ paused: !s.paused }));
+    toast(was ? 'resumed' : 'paused', 'dim');
+  }
+
+  function toggleSpeed() {
+    const g = needGame();
+    if (!g) return;
+    const was = g.state.doubleSpeed;
+    g.setState(s => ({ doubleSpeed: !s.doubleSpeed }));
+    toast(was ? '1x speed' : '2x speed', 'dim');
+  }
+
+  // the question component takes an onCorrect callback. calling it counts the
+  // active question as answered correctly (solo only)
+  function skipQuestion() {
+    const root = fiberRoot();
+    if (!root) return toast('no react fiber found', 'bad');
+    let cb = null;
+    for (const f of fibers(root)) {
+      const p = f.memoizedProps;
+      if (p && typeof p.onCorrect === 'function') {
+        cb = p.onCorrect;
+        if (p.numCorrectsGoal != null) break;
+      }
+    }
+    if (!cb) return toast('no question component found', 'bad');
+    cb();
+    toast('question counted correct', 'ok');
+  }
+
+  // clicks the "Next Round" button when it is on screen
+  let lastNext = 0;
+  const ownText = e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('');
+  function clickNext() {
+    if (Date.now() - lastNext < 1500) return;
+    const el = [...document.querySelectorAll('button, [role=button], div, span')]
+      .find(e => !panel.contains(e) && /^\s*next( round)?\s*$/i.test(ownText(e)));
+    if (!el) return;
+    lastNext = Date.now();
+    el.click();
+  }
+
+  // numeric/string fields named like levels or stats anywhere under an object,
+  // skipping react internals and dom nodes. used by the scan to find towers
+  function deepFind(root, re, maxDepth = 5, limit = 80) {
+    const hits = [];
+    const seen = new WeakSet();
+    const skip = new Set(['_reactInternals', '_reactInternalInstance', 'props', 'refs', 'updater', 'context']);
+    const walk = (o, path, d) => {
+      if (!o || typeof o !== 'object' || d > maxDepth || seen.has(o) || hits.length >= limit) return;
+      if (o === window || (typeof Node !== 'undefined' && o instanceof Node)) return;
+      seen.add(o);
+      for (const k of Object.keys(o)) {
+        if (skip.has(k)) continue;
+        let v;
+        try { v = o[k]; } catch (_) { continue; }
+        const p = path ? `${path}.${k}` : k;
+        if (re.test(k) && (typeof v === 'number' || typeof v === 'string')) hits.push(`${p} = ${v}`);
+        else if (v && typeof v === 'object') walk(v, p, d + 1);
+      }
+    };
+    walk(root, '', 0);
+    return hits;
   }
 
   // answers the active solo question by clicking the choice at answerIndex
@@ -537,6 +658,8 @@
     maxTowers: () => maxTowers(false),
     setTokens: () => setTokens(cfg.tokenAmount),
     setHealth: () => setHealth(cfg.healthAmount),
+    setRound: () => setRound(cfg.roundTarget),
+    skipRound, revive, togglePause, toggleSpeed, skipQuestion,
     addTokens,
     answerNow: () => autoAnswer(false, true),
     scan: doScan,
@@ -629,6 +752,8 @@
     if (cfg.autoMax && HOOKS.setTowerLevel) maxTowers(true);
     if (cfg.autoTokens) setTokens(cfg.tokenAmount, true);
     if (cfg.autoHealth) setHealth(cfg.healthAmount, true);
+    if (cfg.force2x && g && !g.state.doubleSpeed) g.setState({ doubleSpeed: true });
+    if (cfg.autoNext) clickNext();
     if (cfg.autoAnswer) autoAnswer(true);
     refreshStatus();
   }, 500);

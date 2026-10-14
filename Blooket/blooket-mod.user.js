@@ -472,8 +472,13 @@
     const n = Number(amount) || 0;
     const g = getGame();
     if (g) {
+      const mirrors = moneyFields(g);
       g.setState({ tokens: n });
-      if (!quiet) setTimeout(() => print(`tokens after set: ${g.state.tokens}`), 150);
+      for (const m of mirrors) m.o[m.k] = n;
+      if (!quiet) {
+        print(`money fields outside state: ${mirrors.map(m => m.path).join(', ') || 'none'}`);
+        setTimeout(() => print(`tokens after set: ${g.state.tokens}`), 150);
+      }
       return quiet || toast(`tokens set to ${n}`, 'ok');
     }
     if (!store) return quiet || toast('game not found. start a round first', 'bad');
@@ -593,6 +598,31 @@
     if (!cb) return toast('no question component found', 'bad');
     cb();
     toast('question counted correct', 'ok');
+  }
+
+  // numeric fields on the game instance (outside react state/props) named like
+  // money. if the game checks purchases against one of these instead of
+  // state.tokens, setting state alone shows coins but buying still fails
+  function moneyFields(g) {
+    const hits = [];
+    const seen = new WeakSet();
+    const skip = new Set(['_reactInternals', '_reactInternalInstance', 'props', 'refs', 'updater', 'context', 'state']);
+    const exact = /^(tokens?|coins?|gold|money|cash|balance|currency)$/i;
+    const walk = (o, path, d) => {
+      if (!o || typeof o !== 'object' || d > 4 || seen.has(o) || hits.length >= 20) return;
+      if (o === window || (typeof Node !== 'undefined' && o instanceof Node)) return;
+      seen.add(o);
+      for (const k of Object.keys(o)) {
+        if (d === 0 && skip.has(k)) continue;
+        let v;
+        try { v = o[k]; } catch (_) { continue; }
+        const p = path ? `${path}.${k}` : k;
+        if (typeof v === 'number' && exact.test(k)) hits.push({ o, k, path: p });
+        else if (v && typeof v === 'object') walk(v, p, d + 1);
+      }
+    };
+    walk(g, '', 0);
+    return hits;
   }
 
   // logs every change in the game's state (and tower count) to the log box,

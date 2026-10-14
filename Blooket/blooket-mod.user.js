@@ -39,6 +39,9 @@
     roundTarget: 1,
     towerMax: 0,
     watchState: false,
+    dragPlace: false,
+    syncUpgrades: false,
+    invincible: false,
     force2x: false,
     autoNext: false,
     autoMax: false,
@@ -149,6 +152,16 @@
         ${num('healthAmount', 'set to')}
         <div class="dolp-btns">${btn('setHealth', 'set health')}</div>
         ${sw('autoHealth', 'keep health topped up')}
+        ${sw('invincible', 'invincible (health never drops)')}
+      </div>
+      <div class="dolp-card"><h4>build</h4>
+        ${sw('dragPlace', 'drag to place towers')}
+        <div class="dolp-row"><span>tower</span><span data-chosen>none chosen</span></div>
+        ${sw('syncUpgrades', 'upgrade all matching towers')}
+        <div class="dolp-btns">${btn('matchSelected', 'match selected')}</div>
+      </div>
+      <div class="dolp-card"><h4>delete</h4>
+        <div class="dolp-btns">${btn('deleteSelected', 'selected')} ${btn('deleteMatching', 'same type')} ${btn('deleteAll', 'all towers')}</div>
       </div>
     </div>
 
@@ -213,6 +226,7 @@
 
   const logBox = panel.querySelector('#dolp-log');
   const statusEl = panel.querySelector('#dolp-status');
+  const chosenEl = panel.querySelector('[data-chosen]');
   const cfgBox = panel.querySelector('[data-cfgbox]');
   const dot = panel.querySelector('.dot');
 
@@ -604,13 +618,12 @@
   // numeric fields on the game instance (outside react state/props) named like
   // money. if the game checks purchases against one of these instead of
   // state.tokens, setting state alone shows coins but buying still fails
-  function moneyFields(g) {
+  function moneyFields(g, exact = /^(tokens?|coins?|gold|money|cash|balance|currency)$/i, maxDepth = 4) {
     const hits = [];
     const seen = new WeakSet();
     const skip = new Set(['_reactInternals', '_reactInternalInstance', 'props', 'refs', 'updater', 'context', 'state']);
-    const exact = /^(tokens?|coins?|gold|money|cash|balance|currency)$/i;
     const walk = (o, path, d) => {
-      if (!o || typeof o !== 'object' || d > 4 || seen.has(o) || hits.length >= 20) return;
+      if (!o || typeof o !== 'object' || Array.isArray(o) || d > maxDepth || seen.has(o) || hits.length >= 20) return;
       if (o === window || (typeof Node !== 'undefined' && o instanceof Node)) return;
       seen.add(o);
       for (const k of Object.keys(o)) {
@@ -698,6 +711,138 @@
     saveCfg(); syncFields();
     toast('tracing on. click a tile, then the map', 'ok');
   }
+
+  // ---------- invincible / drag place / matching upgrades / bulk delete ----------
+  const INVINCIBLE_HP = 999999;
+  const HEALTH_RE = /^(health|hp|lives|life)$/i;
+
+  // rewrites setState updates that lower health or set gameOver before react sees them
+  function lockHealth(g) {
+    if (g.__dolpLock) return;
+    g.__dolpLock = true;
+    const real = g.setState.bind(g);
+    const fix = p => {
+      if (!cfg.invincible || !p || typeof p !== 'object') return p;
+      const out = { ...p };
+      if (typeof out.health === 'number' && out.health < INVINCIBLE_HP) out.health = INVINCIBLE_HP;
+      if (out.gameOver === true) out.gameOver = false;
+      return out;
+    };
+    g.setState = (upd, cb) => real(typeof upd === 'function' ? (s, p) => fix(upd(s, p)) : fix(upd), cb);
+  }
+
+  // remembers which shop tile picked the current tower, so drag-place can pick it again
+  let tileEl = null;
+  let chosen = '';
+  let prevName = '';
+  document.addEventListener('click', e => {
+    if (panel.contains(e.target)) return;
+    const el = e.target;
+    setTimeout(() => {
+      const g = getGame();
+      const name = (g && g.state.buyTowerName) || '';
+      if (name && name !== prevName) { tileEl = el; chosen = name; }
+      prevName = name;
+    }, 60);
+  }, true);
+
+  // while the left button is held on the board, try to place the chosen tower
+  // under the cursor. buyTower() uses the held tower's position, which follows
+  // the mouse, so a short delay lets the preview catch up first
+  let dragging = false;
+  let placing = false;
+  window.addEventListener('mousedown', e => {
+    dragging = e.button === 0 && !!e.target && e.target.tagName === 'CANVAS';
+  }, true);
+  window.addEventListener('mouseup', () => { dragging = false; }, true);
+  window.addEventListener('mousemove', () => {
+    if (!cfg.dragPlace || !dragging || placing) return;
+    placing = true;
+    setTimeout(() => { try { placeAtMouse(); } finally { placing = false; } }, 50);
+  }, true);
+
+  function placeAtMouse() {
+    const g = getGame();
+    if (!g || typeof g.buyTower !== 'function') return;
+    if (!g.state.buyTowerName) {
+      if (!tileEl || !document.contains(tileEl)) return;
+      tileEl.click();
+      setTimeout(() => g.buyTower(), 70);
+      return;
+    }
+    g.buyTower();
+  }
+
+  // copies upgrade-relevant plain fields from one tower to every other tower of
+  // the same name. position, rotation and cooldown timers are left alone
+  const KEEP = /angle|^cd$|cool|timer|target|time|frame|count|^x$|^y$|^alive$|^follow$|^block$/i;
+  function matchTowers(sel) {
+    const g = getGame();
+    if (!g || !sel || !Array.isArray(g.towers)) return 0;
+    let n = 0;
+    for (const t of g.towers) {
+      if (!t || t === sel || t.name !== sel.name) continue;
+      for (const k of Object.keys(sel)) {
+        const v = sel[k];
+        if (KEEP.test(k) || !['number', 'string', 'boolean'].includes(typeof v)) continue;
+        if (t[k] !== v) t[k] = v;
+      }
+      n++;
+    }
+    if (n && typeof g.forceUpdate === 'function') g.forceUpdate();
+    return n;
+  }
+
+  // after the game's own upgradeTower runs, make the matching towers equal to the upgraded one
+  function installUpgradeSync(g) {
+    if (g.__dolpUpg || typeof g.upgradeTower !== 'function') return;
+    g.__dolpUpg = true;
+    const orig = g.upgradeTower;
+    g.upgradeTower = function (...a) {
+      const self = this || g;
+      const sel = self.state.towerSelected;
+      const r = orig.apply(self, a);
+      if (cfg.syncUpgrades) setTimeout(() => matchTowers(sel), 40);
+      return r;
+    };
+    if (typeof g.forceUpdate === 'function') g.forceUpdate();
+  }
+
+  function matchSelected() {
+    const g = needGame();
+    if (!g) return;
+    const n = matchTowers(g.state.towerSelected);
+    toast(n ? `matched ${n} tower${n > 1 ? 's' : ''}` : 'select a tower that has siblings', n ? 'ok' : 'bad');
+  }
+
+  function removeTowers(pred, label) {
+    const g = needGame();
+    if (!g) return;
+    if (!Array.isArray(g.towers)) return toast('tower list not found', 'bad');
+    let n = 0;
+    for (let i = g.towers.length - 1; i >= 0; i--) {
+      const t = g.towers[i];
+      if (!pred(t)) continue;
+      try { t.alive = false; } catch (_) {}
+      g.towers.splice(i, 1);
+      n++;
+    }
+    if (n) g.setState({ towerSelected: {} });
+    if (n && typeof g.forceUpdate === 'function') g.forceUpdate();
+    toast(n ? `removed ${n} (${label})` : 'nothing to remove', n ? 'ok' : 'dim');
+  }
+  const deleteAll = () => removeTowers(() => true, 'all');
+  const deleteSelected = () => {
+    const g = getGame();
+    const sel = g && g.state.towerSelected;
+    removeTowers(t => t === sel, 'selected');
+  };
+  const deleteMatching = () => {
+    const g = getGame();
+    const sel = g && g.state.towerSelected;
+    if (!sel || !sel.name) return toast('select a tower first', 'bad');
+    removeTowers(t => t && t.name === sel.name, sel.name);
+  };
 
   // clicks the "Next Round" button when it is on screen
   let lastNext = 0;
@@ -821,6 +966,7 @@
     setRound: () => setRound(cfg.roundTarget),
     skipRound, revive, togglePause, toggleSpeed, skipQuestion, learnMax, inspectTowers,
     traceBuy: traceMethods,
+    matchSelected, deleteAll, deleteSelected, deleteMatching,
     addTokens,
     answerNow: () => autoAnswer(false, true),
     scan: doScan,
@@ -880,6 +1026,7 @@
 
   // ---------- live status + tick loop ----------
   const refreshStatus = () => {
+    chosenEl.textContent = chosen || 'none: click a shop tile once';
     const g = getGame();
     if (!g && !store) return;
     const parts = [];
@@ -918,6 +1065,13 @@
     if (cfg.autoHealth) setHealth(cfg.healthAmount, true);
     if (cfg.force2x && g && !g.state.doubleSpeed) g.setState({ doubleSpeed: true });
     if (cfg.autoNext) clickNext();
+    if (g && cfg.invincible) {
+      lockHealth(g);
+      if (g.state.health < INVINCIBLE_HP) g.setState({ health: INVINCIBLE_HP });
+      // a health copy outside state (shallow only, never the enemy list)
+      for (const m of moneyFields(g, HEALTH_RE, 1)) if (m.o[m.k] < INVINCIBLE_HP) m.o[m.k] = INVINCIBLE_HP;
+    }
+    if (g && cfg.syncUpgrades) installUpgradeSync(g);
     if (cfg.watchState && g) watchState(g); else prevState = null;
     if (cfg.autoAnswer) autoAnswer(true);
     refreshStatus();

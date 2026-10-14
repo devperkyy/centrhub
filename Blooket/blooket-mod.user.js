@@ -37,6 +37,7 @@
     healthAmount: 100,
     autoHealth: false,
     roundTarget: 1,
+    towerMax: 0,
     force2x: false,
     autoNext: false,
     autoMax: false,
@@ -139,7 +140,8 @@
 
     <div class="dolp-page" data-page="towers">
       <div class="dolp-card"><h4>upgrades</h4>
-        <div class="dolp-btns">${btn('maxTowers', 'max now [F6]')}</div>
+        ${num('towerMax', 'max level')}
+        <div class="dolp-btns">${btn('maxTowers', 'max now [F6]')} ${btn('learnMax', 'use board max')} ${btn('inspectTowers', 'inspect towers')}</div>
         ${sw('autoMax', 'auto max every second')}
       </div>
       <div class="dolp-card"><h4>health</h4>
@@ -414,7 +416,21 @@
   const state = () => store.getState();
 
   // ---------- features (quiet = called from the tick loop, no toasts) ----------
+  // the game instance keeps placed towers in game.towers, each with a numeric
+  // level. writes level directly, then asks react to redraw
   function maxTowers(quiet = false) {
+    const g = getGame();
+    if (g && Array.isArray(g.towers)) {
+      const cap = Number(cfg.towerMax) || 0;
+      if (!cap) return quiet || toast('set a max level first, or press "use board max"', 'bad');
+      let n = 0;
+      for (const t of g.towers) {
+        if (t && typeof t.level === 'number' && t.level < cap) { t.level = cap; n++; }
+      }
+      if (n && typeof g.forceUpdate === 'function') g.forceUpdate();
+      if (!quiet) toast(n ? `${n} tower${n > 1 ? 's' : ''} set to level ${cap}` : 'nothing to max', n ? 'ok' : 'dim');
+      return n;
+    }
     if (!store || !HOOKS.setTowerLevel) {
       return quiet || toast('tower data not located yet. place towers, misc > scan components, paste it', 'bad');
     }
@@ -481,6 +497,35 @@
     if (!g) toast('game not found. start a round first', 'bad');
     return g;
   };
+
+  // upgrade one tower to its real max by hand, then this reads the highest
+  // level on the board so max towers uses the game's own cap
+  function learnMax() {
+    const g = needGame();
+    if (!g) return;
+    const levels = Array.isArray(g.towers) ? g.towers.map(t => t && t.level).filter(l => typeof l === 'number') : [];
+    const top = levels.length ? Math.max(...levels) : 0;
+    if (!top) return toast('no upgraded tower on the board yet', 'bad');
+    cfg.towerMax = top;
+    saveCfg(); syncFields();
+    toast(`max level set to ${top}`, 'ok');
+  }
+
+  // prints what a tower object looks like and which game methods look relevant
+  function inspectTowers() {
+    const g = needGame();
+    if (!g) return;
+    const list = Array.isArray(g.towers) ? g.towers : [];
+    print(`towers: ${list.length}`);
+    list.slice(0, 3).forEach((t, i) => print(`tower ${i}: ${brief(t)}`));
+    const re = /tower|upgrade|buy|sell|place|round|correct|question|answer/i;
+    const names = new Set([
+      ...Object.getOwnPropertyNames(Object.getPrototypeOf(g)),
+      ...Object.keys(g),
+    ]);
+    const methods = [...names].filter(k => re.test(k) && typeof g[k] === 'function');
+    print('methods: ' + (methods.join(', ') || 'none'));
+  }
 
   function setRound(n) {
     const g = needGame();
@@ -659,7 +704,7 @@
     setTokens: () => setTokens(cfg.tokenAmount),
     setHealth: () => setHealth(cfg.healthAmount),
     setRound: () => setRound(cfg.roundTarget),
-    skipRound, revive, togglePause, toggleSpeed, skipQuestion,
+    skipRound, revive, togglePause, toggleSpeed, skipQuestion, learnMax, inspectTowers,
     addTokens,
     answerNow: () => autoAnswer(false, true),
     scan: doScan,
@@ -724,6 +769,9 @@
     const parts = [];
     try {
       if (g) parts.push(`tokens ${g.state.tokens}`, `health ${g.state.health}`, `round ${g.state.round}`);
+      if (g && Array.isArray(g.towers)) {
+        parts.push(`towers ${g.towers.length} [lv ${g.towers.slice(0, 8).map(t => t && t.level).join(',')}]`);
+      }
       if (store && HOOKS.getTokens) parts.push(`tokens ${HOOKS.getTokens(state())}`);
       if (store && HOOKS.getTowers) {
         const towers = HOOKS.getTowers(state());

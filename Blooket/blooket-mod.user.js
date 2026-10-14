@@ -42,6 +42,8 @@
     dragPlace: false,
     syncUpgrades: false,
     invincible: false,
+    damageMult: 2,
+    damageBoost: false,
     force2x: false,
     autoNext: false,
     autoMax: false,
@@ -162,6 +164,10 @@
       </div>
       <div class="dolp-card"><h4>delete</h4>
         <div class="dolp-btns">${btn('deleteSelected', 'selected')} ${btn('deleteMatching', 'same type')} ${btn('deleteAll', 'all towers')}</div>
+      </div>
+      <div class="dolp-card"><h4>damage</h4>
+        ${num('damageMult', 'multiplier (x)')}
+        ${sw('damageBoost', 'multiply damage dealt')}
       </div>
     </div>
 
@@ -547,7 +553,8 @@
     if (!g) return;
     const list = Array.isArray(g.towers) ? g.towers : [];
     print(`towers: ${list.length}`);
-    list.slice(0, 3).forEach((t, i) => print(`tower ${i}: ${brief(t)}`));
+    const sample = list.length > 2 ? [list[0], list[1], list[list.length - 1]] : list;
+    sample.forEach(t => print(`tower ${list.indexOf(t)}: ${brief(t)}`));
     const re = /tower|upgrade|buy|sell|place|round|correct|question|answer/i;
     const names = new Set([
       ...Object.getOwnPropertyNames(Object.getPrototypeOf(g)),
@@ -556,6 +563,12 @@
     const methods = [...names].filter(k => re.test(k) && typeof g[k] === 'function');
     print('methods: ' + (methods.join(', ') || 'none'));
     print('max-ish fields: ' + (deepFind(g, /^max/i, 4, 20).join(' | ') || 'none'));
+    const arrays = Object.keys(g).filter(k => Array.isArray(g[k])).map(k => {
+      const first = g[k][0];
+      return `${k}[${g[k].length}]` + (first && typeof first === 'object' ? ' ' + brief(first) : '');
+    });
+    print('arrays: ' + (arrays.join(' | ') || 'none'));
+    print('enemy list: ' + (enemyList(g) ? enemyKey : 'not found (needs enemies on screen)'));
   }
 
   function setRound(n) {
@@ -711,6 +724,46 @@
     saveCfg(); syncFields();
     toast('tracing on. click a tile, then the map', 'ok');
   }
+
+  // ---------- damage multiplier ----------
+  // towers have no damage field (stats come from name + level inside the game),
+  // so the multiplier works on the receiving end: every frame, any enemy whose
+  // health dropped gets the extra (mult - 1) x that drop taken off as well.
+  // the enemy list is found by shape: an array on the game with health/hp numbers
+  let enemyKey = null;
+  let enemyFor = null;
+  function enemyList(g) {
+    if (enemyFor !== g) { enemyFor = g; enemyKey = null; }
+    if (enemyKey && Array.isArray(g[enemyKey])) return g[enemyKey];
+    for (const k of Object.keys(g)) {
+      const v = g[k];
+      if (k === 'towers' || !Array.isArray(v) || !v.length) continue;
+      const e = v[0];
+      if (e && typeof e === 'object' && (typeof e.health === 'number' || typeof e.hp === 'number')) {
+        enemyKey = k;
+        return v;
+      }
+    }
+    return null;
+  }
+
+  const seenHp = new WeakMap();
+  function boostDamage() {
+    requestAnimationFrame(boostDamage);
+    const m = Number(cfg.damageMult);
+    if (!cfg.damageBoost || !m || m === 1 || !alive(game)) return;
+    const list = enemyList(game);
+    if (!list) return;
+    for (const e of list) {
+      if (!e || typeof e !== 'object') continue;
+      const k = typeof e.health === 'number' ? 'health' : typeof e.hp === 'number' ? 'hp' : null;
+      if (!k) continue;
+      const prev = seenHp.get(e);
+      if (prev !== undefined && e[k] < prev) e[k] -= (prev - e[k]) * (m - 1);
+      seenHp.set(e, e[k]);
+    }
+  }
+  requestAnimationFrame(boostDamage);
 
   // ---------- invincible / drag place / matching upgrades / bulk delete ----------
   const INVINCIBLE_HP = 999999;

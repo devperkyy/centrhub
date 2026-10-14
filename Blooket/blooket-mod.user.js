@@ -421,14 +421,21 @@
   function maxTowers(quiet = false) {
     const g = getGame();
     if (g && Array.isArray(g.towers)) {
-      const cap = Number(cfg.towerMax) || 0;
-      if (!cap) return quiet || toast('set a max level first, or press "use board max"', 'bad');
-      let n = 0;
+      // cap per tower: the max level field if set, else a maxLevel-style field on the tower itself
+      const capOf = t => Number(cfg.towerMax) ||
+        ['maxLevel', 'maxLvl', 'max'].map(k => t[k]).find(v => typeof v === 'number' && v > 0) || 0;
+      let n = 0, unknown = 0;
       for (const t of g.towers) {
-        if (t && typeof t.level === 'number' && t.level < cap) { t.level = cap; n++; }
+        if (!t || typeof t.level !== 'number') continue;
+        const cap = capOf(t);
+        if (!cap) { unknown++; continue; }
+        if (t.level < cap) { t.level = cap; n++; }
       }
       if (n && typeof g.forceUpdate === 'function') g.forceUpdate();
-      if (!quiet) toast(n ? `${n} tower${n > 1 ? 's' : ''} set to level ${cap}` : 'nothing to max', n ? 'ok' : 'dim');
+      if (!quiet) {
+        if (unknown && !n) toast('max level unknown. set it, or press "use board max"', 'bad');
+        else toast(n ? `${n} tower${n > 1 ? 's' : ''} maxed` : 'nothing to max', n ? 'ok' : 'dim');
+      }
       return n;
     }
     if (!store || !HOOKS.setTowerLevel) {
@@ -464,6 +471,7 @@
     const g = getGame();
     if (g) {
       g.setState({ tokens: n });
+      if (!quiet) setTimeout(() => print(`tokens after set: ${g.state.tokens}`), 150);
       return quiet || toast(`tokens set to ${n}`, 'ok');
     }
     if (!store) return quiet || toast('game not found. start a round first', 'bad');
@@ -525,6 +533,7 @@
     ]);
     const methods = [...names].filter(k => re.test(k) && typeof g[k] === 'function');
     print('methods: ' + (methods.join(', ') || 'none'));
+    print('max-ish fields: ' + (deepFind(g, /^max/i, 4, 20).join(' | ') || 'none'));
   }
 
   function setRound(n) {

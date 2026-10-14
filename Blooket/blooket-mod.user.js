@@ -37,7 +37,10 @@
     healthAmount: 100,
     autoHealth: false,
     roundTarget: 1,
-    towerMax: 0,
+    buffField: '',
+    buffMult: 2,
+    buffScope: 'all',
+    buffAuto: false,
     watchState: false,
     dragPlace: false,
     syncUpgrades: false,
@@ -64,7 +67,7 @@
 
   // ---------- styles ----------
   const CSS = `
-    #dolp-panel{position:fixed;top:80px;left:20px;z-index:2147483647;width:360px;
+    #dolp-panel{position:fixed;top:80px;left:20px;z-index:2147483647;width:420px;
       background:#121218;color:#e6e6ee;font:12px/1.45 Consolas,"Segoe UI",monospace;
       border:1px solid #2a2a36;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.55);
       opacity:0;transform:translateY(-8px) scale(.98);pointer-events:none;
@@ -139,6 +142,7 @@
       <button class="dolp-tab" data-tab="towers">towers</button>
       <button class="dolp-tab" data-tab="economy">economy</button>
       <button class="dolp-tab" data-tab="game">game</button>
+      <button class="dolp-tab" data-tab="buffs">buffs</button>
       <button class="dolp-tab" data-tab="solo">solo</button>
       <button class="dolp-tab" data-tab="misc">misc</button>
       <button class="dolp-tab" data-tab="config">config</button>
@@ -146,8 +150,8 @@
 
     <div class="dolp-page" data-page="towers">
       <div class="dolp-card"><h4>upgrades</h4>
-        ${num('towerMax', 'max level')}
-        <div class="dolp-btns">${btn('maxTowers', 'max now [F6]')} ${btn('learnMax', 'use board max')} ${btn('inspectTowers', 'inspect towers')}</div>
+        <div class="dolp-btns">${btn('maxTowers', 'max all [F6]')} ${btn('maxType', 'max same type')} ${btn('maxSel', 'max selected')}</div>
+        <div class="dolp-btns">${btn('inspectTowers', 'inspect towers')}</div>
         ${sw('autoMax', 'auto max every second')}
       </div>
       <div class="dolp-card"><h4>health</h4>
@@ -160,7 +164,7 @@
         ${sw('dragPlace', 'drag to place towers')}
         <div class="dolp-row"><span>tower</span><span data-chosen>none chosen</span></div>
         ${sw('syncUpgrades', 'upgrade all matching towers')}
-        <div class="dolp-btns">${btn('matchSelected', 'match selected')}</div>
+        <div class="dolp-row"><span>upgrade steps recorded</span><span data-steps>0</span></div>
       </div>
       <div class="dolp-card"><h4>delete</h4>
         <div class="dolp-btns">${btn('deleteSelected', 'selected')} ${btn('deleteMatching', 'same type')} ${btn('deleteAll', 'all towers')}</div>
@@ -192,6 +196,24 @@
       </div>
       <div class="dolp-card"><h4>questions (solo)</h4>
         <div class="dolp-btns">${btn('skipQuestion', 'skip question')}</div>
+      </div>
+    </div>
+
+    <div class="dolp-page" data-page="buffs">
+      <div class="dolp-card"><h4>who gets it</h4>
+        <label class="dolp-row"><span>apply to</span>
+          <select class="dolp-in wide" data-cfg="buffScope">
+            <option value="selected">selected tower</option>
+            <option value="type">same type as selected</option>
+            <option value="all">all towers</option>
+          </select></label>
+      </div>
+      <div class="dolp-card"><h4>buff</h4>
+        <div class="dolp-btns">${btn('buffRange', 'range')} ${btn('buffSpeed', 'speed')} ${btn('buffDamage', 'damage')} ${btn('listFields', 'list fields')}</div>
+        ${txt('buffField', 'field')}
+        ${num('buffMult', 'multiplier (x)')}
+        <div class="dolp-btns">${btn('applyBuff', 'apply')} ${btn('resetBuffs', 'reset')}</div>
+        ${sw('buffAuto', 're-apply every tick')}
       </div>
     </div>
 
@@ -233,6 +255,7 @@
   const logBox = panel.querySelector('#dolp-log');
   const statusEl = panel.querySelector('#dolp-status');
   const chosenEl = panel.querySelector('[data-chosen]');
+  const stepsEl = panel.querySelector('[data-steps]');
   const cfgBox = panel.querySelector('[data-cfgbox]');
   const dot = panel.querySelector('.dot');
 
@@ -274,7 +297,8 @@
   for (const el of panel.querySelectorAll('[data-cfg]')) {
     el.onchange = () => {
       const k = el.dataset.cfg;
-      cfg[k] = el.type === 'checkbox' ? el.checked : el.type === 'text' ? el.value : Number(el.value);
+      cfg[k] = el.type === 'checkbox' ? el.checked
+        : (el.type === 'text' || el.tagName === 'SELECT') ? el.value : Number(el.value);
       saveCfg();
     };
   }
@@ -438,28 +462,11 @@
   const state = () => store.getState();
 
   // ---------- features (quiet = called from the tick loop, no toasts) ----------
-  // the game instance keeps placed towers in game.towers, each with a numeric
-  // level. writes level directly, then asks react to redraw
+  // upgrades go through the game's own upgradeTower (see "real upgrades" below);
+  // writing tower.level only changes the number, not the stats
   function maxTowers(quiet = false) {
     const g = getGame();
-    if (g && Array.isArray(g.towers)) {
-      // cap per tower: the max level field if set, else a maxLevel-style field on the tower itself
-      const capOf = t => Number(cfg.towerMax) ||
-        ['maxLevel', 'maxLvl', 'max'].map(k => t[k]).find(v => typeof v === 'number' && v > 0) || 0;
-      let n = 0, unknown = 0;
-      for (const t of g.towers) {
-        if (!t || typeof t.level !== 'number') continue;
-        const cap = capOf(t);
-        if (!cap) { unknown++; continue; }
-        if (t.level < cap) { t.level = cap; n++; }
-      }
-      if (n && typeof g.forceUpdate === 'function') g.forceUpdate();
-      if (!quiet) {
-        if (unknown && !n) toast('max level unknown. set it, or press "use board max"', 'bad');
-        else toast(n ? `${n} tower${n > 1 ? 's' : ''} maxed` : 'nothing to max', n ? 'ok' : 'dim');
-      }
-      return n;
-    }
+    if (g && Array.isArray(g.towers)) return maxBySteps('all', quiet);
     if (!store || !HOOKS.setTowerLevel) {
       return quiet || toast('tower data not located yet. place towers, misc > scan components, paste it', 'bad');
     }
@@ -534,19 +541,6 @@
     return g;
   };
 
-  // upgrade one tower to its real max by hand, then this reads the highest
-  // level on the board so max towers uses the game's own cap
-  function learnMax() {
-    const g = needGame();
-    if (!g) return;
-    const levels = Array.isArray(g.towers) ? g.towers.map(t => t && t.level).filter(l => typeof l === 'number') : [];
-    const top = levels.length ? Math.max(...levels) : 0;
-    if (!top) return toast('no upgraded tower on the board yet', 'bad');
-    cfg.towerMax = top;
-    saveCfg(); syncFields();
-    toast(`max level set to ${top}`, 'ok');
-  }
-
   // prints what a tower object looks like and which game methods look relevant
   function inspectTowers() {
     const g = needGame();
@@ -554,7 +548,10 @@
     const list = Array.isArray(g.towers) ? g.towers : [];
     print(`towers: ${list.length}`);
     const sample = list.length > 2 ? [list[0], list[1], list[list.length - 1]] : list;
-    sample.forEach(t => print(`tower ${list.indexOf(t)}: ${brief(t)}`));
+    sample.forEach(t => {
+      print(`tower ${list.indexOf(t)}: ${brief(t)}`);
+      print('  numbers: ' + numFields(t).map(k => `${k}=${t[k]}`).join(', '));
+    });
     const re = /tower|upgrade|buy|sell|place|round|correct|question|answer/i;
     const names = new Set([
       ...Object.getOwnPropertyNames(Object.getPrototypeOf(g)),
@@ -826,46 +823,172 @@
     g.buyTower();
   }
 
-  // copies upgrade-relevant plain fields from one tower to every other tower of
-  // the same name. position, rotation and cooldown timers are left alone
-  const KEEP = /angle|^cd$|cool|timer|target|time|frame|count|^x$|^y$|^alive$|^follow$|^block$/i;
-  function matchTowers(sel) {
-    const g = getGame();
-    if (!g || !sel || !Array.isArray(g.towers)) return 0;
-    let n = 0;
-    for (const t of g.towers) {
-      if (!t || t === sel || t.name !== sel.name) continue;
-      for (const k of Object.keys(sel)) {
-        const v = sel[k];
-        if (KEEP.test(k) || !['number', 'string', 'boolean'].includes(typeof v)) continue;
-        if (t[k] !== v) t[k] = v;
-      }
-      n++;
-    }
-    if (n && typeof g.forceUpdate === 'function') g.forceUpdate();
-    return n;
-  }
+  // ---------- real upgrades: record by hand, replay on other towers ----------
+  // writing tower.level only changes the number shown, not the stats, so
+  // upgrades go through the game's own upgradeTower. every upgrade done by
+  // hand is recorded as steps[towerName][levelBefore] = arguments, then
+  // replayed on other towers with that tower swapped in as the selection
+  const steps = {};
+  const stepCount = () => Object.values(steps).reduce((n, s) => n + Object.keys(s).length, 0);
 
-  // after the game's own upgradeTower runs, make the matching towers equal to the upgraded one
   function installUpgradeSync(g) {
     if (g.__dolpUpg || typeof g.upgradeTower !== 'function') return;
     g.__dolpUpg = true;
-    const orig = g.upgradeTower;
+    const raw = g.upgradeTower;
+    g.__dolpRaw = raw;
     g.upgradeTower = function (...a) {
       const self = this || g;
       const sel = self.state.towerSelected;
-      const r = orig.apply(self, a);
-      if (cfg.syncUpgrades) setTimeout(() => matchTowers(sel), 40);
+      const before = sel && typeof sel.level === 'number' ? sel.level : null;
+      const r = raw.apply(self, a);
+      if (before !== null && sel.name) {
+        setTimeout(() => {
+          if (sel.level <= before) return;
+          (steps[sel.name] = steps[sel.name] || {})[before] = a;
+          if (cfg.syncUpgrades) syncSiblings(sel, before);
+        }, 40);
+      }
       return r;
     };
     if (typeof g.forceUpdate === 'function') g.forceUpdate();
   }
 
-  function matchSelected() {
+  // one level up for tower t through the game's own function. returns 'ok' or why it stopped
+  function upgradeOnce(g, t) {
+    const a = steps[t.name] && steps[t.name][t.level];
+    const raw = g.__dolpRaw;
+    if (!a || !raw) return 'nostep';
+    const prev = g.state.towerSelected;
+    const prevLevel = prev && prev.level;
+    const before = t.level;
+    g.state.towerSelected = t;
+    try { raw.apply(g, a); } catch (_) { return 'error'; } finally { g.state.towerSelected = prev; }
+    if (t.level > before) return 'ok';
+    return prev && prev !== t && prev.level > prevLevel ? 'wrongtarget' : 'noeffect';
+  }
+
+  const stopMsg = {
+    wrongtarget: 'the game upgraded the selected tower, not the swapped one. replay is not possible',
+    noeffect: 'replay changed nothing',
+    error: 'replay threw an error',
+  };
+
+  // a failed replay in a loop would repeat every second, so it turns auto max off
+  function replayFailed(r, quiet) {
+    if (quiet) { cfg.autoMax = false; saveCfg(); syncFields(); }
+    toast(stopMsg[r], 'bad');
+  }
+
+  function syncSiblings(sel, before) {
+    const g = getGame();
+    if (!g || !Array.isArray(g.towers)) return;
+    let n = 0;
+    for (const t of g.towers) {
+      if (!t || t === sel || t.name !== sel.name || t.level !== before) continue;
+      const r = upgradeOnce(g, t);
+      if (r === 'ok') { n++; continue; }
+      if (r !== 'nostep') { replayFailed(r, false); break; }
+    }
+    if (n) toast(`${n} matching tower${n > 1 ? 's' : ''} upgraded`, 'ok');
+  }
+
+  // scope: 'all' | 'type' (same name as the selected tower) | 'selected'
+  function maxBySteps(scope, quiet = false) {
+    const g = getGame();
+    if (!g || !Array.isArray(g.towers)) return quiet || toast('game not found. start a round first', 'bad');
+    const sel = g.state.towerSelected;
+    let list = g.towers;
+    if (scope !== 'all') {
+      if (!sel || !sel.name) return quiet || toast('select a tower first', 'bad');
+      list = scope === 'type' ? g.towers.filter(t => t && t.name === sel.name) : [sel];
+    }
+    let n = 0;
+    for (const t of list) {
+      if (!t || typeof t.level !== 'number') continue;
+      for (let guard = 0; guard < 25; guard++) {
+        const r = upgradeOnce(g, t);
+        if (r === 'ok') { n++; continue; }
+        if (r === 'nostep') break;
+        replayFailed(r, quiet);
+        return n;
+      }
+    }
+    if (!quiet) {
+      if (n) toast(`${n} upgrade${n > 1 ? 's' : ''} applied`, 'ok');
+      else toast(stepCount() ? 'nothing left to upgrade' : 'upgrade a tower by hand first: each step is recorded and replayed',
+        stepCount() ? 'dim' : 'bad');
+    }
+    return n;
+  }
+
+  // ---------- buffs: scale a numeric field on selected / same type / all towers ----------
+  // each tower remembers its original value per field, so applying again
+  // rescales from the original instead of compounding
+  const buffRec = new WeakMap();
+  const numFields = t => Object.keys(t).filter(k => typeof t[k] === 'number');
+
+  function pickField(re, label) {
     const g = needGame();
     if (!g) return;
-    const n = matchTowers(g.state.towerSelected);
-    toast(n ? `matched ${n} tower${n > 1 ? 's' : ''}` : 'select a tower that has siblings', n ? 'ok' : 'bad');
+    const sel = g.state.towerSelected;
+    if (!sel || !sel.name) return toast('select a tower first', 'bad');
+    const k = numFields(sel).find(f => re.test(f));
+    if (!k) return toast(`no ${label} field found. try list fields`, 'bad');
+    cfg.buffField = k;
+    saveCfg(); syncFields();
+    const cooldown = /cool|^cd$|delay|interval/i.test(k);
+    toast(`field ${k} = ${sel[k]}${cooldown ? '. lower is faster: use a multiplier under 1' : ''}`, 'ok');
+  }
+  const buffRange = () => pickField(/range|radius/i, 'range');
+  const buffSpeed = () => pickField(/speed|rate|cool|^cd$|delay|interval/i, 'speed');
+  const buffDamage = () => pickField(/damage|dmg|power|atk|attack/i, 'damage');
+
+  function listFields() {
+    const g = needGame();
+    if (!g) return;
+    const sel = g.state.towerSelected;
+    if (!sel || !sel.name) return toast('select a tower first', 'bad');
+    print(`${sel.name} number fields: ` + numFields(sel).map(k => `${k}=${sel[k]}`).join(', '));
+  }
+
+  function applyBuff(quiet = false) {
+    const g = getGame();
+    if (!g || !Array.isArray(g.towers)) return quiet || toast('game not found. start a round first', 'bad');
+    const f = String(cfg.buffField || '').trim();
+    const m = Number(cfg.buffMult);
+    if (!f || !m) return quiet || toast('set a field and a multiplier', 'bad');
+    const sel = g.state.towerSelected;
+    let targets;
+    if (cfg.buffScope === 'all') targets = g.towers;
+    else if (!sel || !sel.name) return quiet || toast('select a tower first', 'bad');
+    else targets = cfg.buffScope === 'type' ? g.towers.filter(t => t && t.name === sel.name) : [sel];
+    let n = 0;
+    for (const t of targets) {
+      if (!t || typeof t[f] !== 'number') continue;
+      let rec = buffRec.get(t);
+      if (!rec) buffRec.set(t, rec = {});
+      const r = rec[f];
+      // if the game changed the value since our last write (an upgrade), that is the new base
+      const base = r && t[f] === r.last ? r.base : t[f];
+      const next = base * m;
+      t[f] = next;
+      rec[f] = { base, last: next };
+      n++;
+    }
+    if (!quiet) toast(n ? `${f} x${m} on ${n} tower${n > 1 ? 's' : ''}` : `no tower has a number field "${f}"`, n ? 'ok' : 'bad');
+  }
+
+  function resetBuffs() {
+    const g = getGame();
+    if (!g || !Array.isArray(g.towers)) return;
+    let n = 0;
+    for (const t of [...g.towers, g.state.towerSelected]) {
+      const rec = t && buffRec.get(t);
+      if (!rec) continue;
+      for (const [f, r] of Object.entries(rec)) if (t[f] === r.last) { t[f] = r.base; n++; }
+      buffRec.delete(t);
+    }
+    toast(n ? `reset ${n} buff${n > 1 ? 's' : ''}` : 'no buffs to reset', n ? 'ok' : 'dim');
   }
 
   function removeTowers(pred, label) {
@@ -1017,9 +1140,13 @@
     setTokens: () => setTokens(cfg.tokenAmount),
     setHealth: () => setHealth(cfg.healthAmount),
     setRound: () => setRound(cfg.roundTarget),
-    skipRound, revive, togglePause, toggleSpeed, skipQuestion, learnMax, inspectTowers,
+    skipRound, revive, togglePause, toggleSpeed, skipQuestion, inspectTowers,
     traceBuy: traceMethods,
-    matchSelected, deleteAll, deleteSelected, deleteMatching,
+    maxType: () => maxBySteps('type', false),
+    maxSel: () => maxBySteps('selected', false),
+    applyBuff: () => applyBuff(false),
+    resetBuffs, buffRange, buffSpeed, buffDamage, listFields,
+    deleteAll, deleteSelected, deleteMatching,
     addTokens,
     answerNow: () => autoAnswer(false, true),
     scan: doScan,
@@ -1080,6 +1207,7 @@
   // ---------- live status + tick loop ----------
   const refreshStatus = () => {
     chosenEl.textContent = chosen || 'none: click a shop tile once';
+    stepsEl.textContent = stepCount();
     const g = getGame();
     if (!g && !store) return;
     const parts = [];
@@ -1113,7 +1241,7 @@
     if (g && !seenGame) { seenGame = true; print('game component found'); toast('game found', 'ok'); }
     if (!g) seenGame = false;
     if (!store && !g && ++tries === 20) { print('no store or game after 10s'); diagnose(); }
-    if (cfg.autoMax && HOOKS.setTowerLevel) maxTowers(true);
+    if (cfg.autoMax) maxTowers(true);
     if (cfg.autoTokens) setTokens(cfg.tokenAmount, true);
     if (cfg.autoHealth) setHealth(cfg.healthAmount, true);
     if (cfg.force2x && g && !g.state.doubleSpeed) g.setState({ doubleSpeed: true });
@@ -1124,7 +1252,8 @@
       // a health copy outside state (shallow only, never the enemy list)
       for (const m of moneyFields(g, HEALTH_RE, 1)) if (m.o[m.k] < INVINCIBLE_HP) m.o[m.k] = INVINCIBLE_HP;
     }
-    if (g && cfg.syncUpgrades) installUpgradeSync(g);
+    if (g) installUpgradeSync(g);
+    if (cfg.buffAuto) applyBuff(true);
     if (cfg.watchState && g) watchState(g); else prevState = null;
     if (cfg.autoAnswer) autoAnswer(true);
     refreshStatus();

@@ -642,6 +642,26 @@
   // arguments and its return value are logged, and turns the state logger on.
   // click a shop tile and the map afterwards and read the log
   let tracedFor = null;
+
+  // the board is drawn with p5. a tower object carries its p5 instance, so
+  // wrap the mouse handlers there to see whether a map click reaches the game
+  const p5Wrapped = new WeakSet();
+  function wrapP5(p, g) {
+    p5Wrapped.add(p);
+    const names = [];
+    for (const k of ['mousePressed', 'mouseReleased', 'mouseClicked']) {
+      const orig = p[k];
+      if (typeof orig !== 'function') continue;
+      p[k] = function (...a) {
+        print(`p5.${k} at ${Math.round(p.mouseX)},${Math.round(p.mouseY)}`);
+        const r = orig.apply(this, a);
+        print(`towers now ${Array.isArray(g.towers) ? g.towers.length : '?'}`);
+        return r;
+      };
+      names.push(k);
+    }
+    print(`p5 handlers wrapped: ${names.join(', ') || 'none'}`);
+  }
   function traceMethods() {
     const g = needGame();
     if (!g) return;
@@ -650,14 +670,20 @@
       const show = x => (typeof x === 'function' ? 'fn' : brief(x)).slice(0, 120);
       const names = new Set([...Object.getOwnPropertyNames(Object.getPrototypeOf(g)), ...Object.keys(g)]);
       const wrapped = [];
+      const counts = {};
       for (const k of names) {
         let orig;
         try { orig = g[k]; } catch (_) { continue; }
         if (!re.test(k) || typeof orig !== 'function' || k === 'setState' || k === 'forceUpdate') continue;
         g[k] = function (...a) {
-          print(`call ${k}(${a.map(show).join(', ')})`);
+          // per-frame methods would bury everything else: log each one 3 times, then mute it
+          counts[k] = (counts[k] || 0) + 1;
+          const loud = counts[k] <= 3;
+          if (loud) print(`call ${k}(${a.map(show).join(', ')})`);
           const r = orig.apply(this, a);
-          print(`${k} -> ${show(r)}`);
+          if (loud) print(`${k} -> ${show(r)}`);
+          if (counts[k] === 4) print(`${k} muted (called every frame)`);
+          if (r && r.p5 && typeof r.p5 === 'object' && !p5Wrapped.has(r.p5)) wrapP5(r.p5, g);
           return r;
         };
         wrapped.push(k);

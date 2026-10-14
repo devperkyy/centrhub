@@ -34,6 +34,8 @@
   const DEFAULTS = {
     tokenAmount: 999999,
     tokenStep: 1000,
+    healthAmount: 100,
+    autoHealth: false,
     autoMax: false,
     autoTokens: false,
     autoAnswer: false,
@@ -135,6 +137,11 @@
       <div class="dolp-card"><h4>upgrades</h4>
         <div class="dolp-btns">${btn('maxTowers', 'max now [F6]')}</div>
         ${sw('autoMax', 'auto max every second')}
+      </div>
+      <div class="dolp-card"><h4>health</h4>
+        ${num('healthAmount', 'set to')}
+        <div class="dolp-btns">${btn('setHealth', 'set health')}</div>
+        ${sw('autoHealth', 'keep health topped up')}
       </div>
     </div>
 
@@ -329,7 +336,21 @@
       const name = compName(f);
       const inst = f.stateNode;
       const isClass = inst && typeof inst === 'object' && inst.state && typeof inst.setState === 'function';
-      if (isClass) cls.push(`[class ${name}] state ${brief(inst.state)}`);
+      if (isClass) {
+        cls.push(`[class ${name}] state ${brief(inst.state)}`);
+        for (const k of Object.keys(inst.state)) {
+          const v = inst.state[k];
+          if (v && typeof v === 'object') cls.push(`[state ${name}.${k}] ${brief(v)}`);
+        }
+        const skip = ['props', 'context', 'refs', 'updater', 'state', '_reactInternals', '_reactInternalInstance'];
+        const own = Object.keys(inst).filter(k => !skip.includes(k)).slice(0, 40);
+        if (own.length) {
+          cls.push(`[fields ${name}] ` + own.map(k => {
+            const v = inst[k];
+            return `${k}: ${v && typeof v === 'object' ? brief(v) : typeof v === 'function' ? 'fn' : String(v)}`;
+          }).join(' | '));
+        }
+      }
       const p = f.memoizedProps;
       if (p && typeof p === 'object') {
         for (const k of Object.keys(p)) {
@@ -382,19 +403,54 @@
     return n;
   }
 
+  // the tower defense page keeps its state in one class component whose state
+  // has tokens, health and round, not in redux. component names are minified,
+  // so it is found by the shape of its state
+  let game = null;
+  const alive = g => !!(g && g._reactInternals && g._reactInternals.return);
+  function findGame() {
+    const root = fiberRoot();
+    if (!root) return null;
+    for (const f of fibers(root)) {
+      const i = f.stateNode;
+      if (i && typeof i === 'object' && typeof i.setState === 'function' && i.state &&
+          typeof i.state.tokens === 'number' && typeof i.state.health === 'number') return i;
+    }
+    return null;
+  }
+  const getGame = () => { if (!alive(game)) game = findGame(); return game; };
+
   function setTokens(amount, quiet = false) {
-    if (!store) return quiet || toast('no store yet', 'bad');
+    const n = Number(amount) || 0;
+    const g = getGame();
+    if (g) {
+      g.setState({ tokens: n });
+      return quiet || toast(`tokens set to ${n}`, 'ok');
+    }
+    if (!store) return quiet || toast('game not found. start a round first', 'bad');
     if (!HOOKS.setTokens) return quiet || toast('tokens hook not filled', 'bad');
-    store.dispatch(HOOKS.setTokens(Number(amount) || 0));
-    if (!quiet) toast(`tokens set to ${amount}`, 'ok');
+    store.dispatch(HOOKS.setTokens(n));
+    if (!quiet) toast(`tokens set to ${n}`, 'ok');
   }
 
   function addTokens() {
-    if (!store) return toast('no store yet', 'bad');
+    const step = Number(cfg.tokenStep) || 0;
+    const g = getGame();
+    if (g) {
+      g.setState(s => ({ tokens: s.tokens + step }));
+      return toast(`+${step} tokens`, 'ok');
+    }
+    if (!store) return toast('game not found. start a round first', 'bad');
     if (!HOOKS.getTokens || !HOOKS.setTokens) return toast('tokens hooks not filled', 'bad');
-    const now = HOOKS.getTokens(state());
-    store.dispatch(HOOKS.setTokens(now + Number(cfg.tokenStep)));
-    toast(`+${cfg.tokenStep} tokens`, 'ok');
+    store.dispatch(HOOKS.setTokens(HOOKS.getTokens(state()) + step));
+    toast(`+${step} tokens`, 'ok');
+  }
+
+  function setHealth(amount, quiet = false) {
+    const g = getGame();
+    if (!g) return quiet || toast('game not found. start a round first', 'bad');
+    g.setState({ health: Number(amount) || 0 });
+    if (!quiet) toast(`health set to ${amount}`, 'ok');
   }
 
   // answers the active solo question by clicking the choice at answerIndex
@@ -480,6 +536,7 @@
   const actions = {
     maxTowers: () => maxTowers(false),
     setTokens: () => setTokens(cfg.tokenAmount),
+    setHealth: () => setHealth(cfg.healthAmount),
     addTokens,
     answerNow: () => autoAnswer(false, true),
     scan: doScan,
@@ -539,11 +596,13 @@
 
   // ---------- live status + tick loop ----------
   const refreshStatus = () => {
-    if (!store) return;
+    const g = getGame();
+    if (!g && !store) return;
     const parts = [];
     try {
-      if (HOOKS.getTokens) parts.push(`tokens ${HOOKS.getTokens(state())}`);
-      if (HOOKS.getTowers) {
+      if (g) parts.push(`tokens ${g.state.tokens}`, `health ${g.state.health}`, `round ${g.state.round}`);
+      if (store && HOOKS.getTokens) parts.push(`tokens ${HOOKS.getTokens(state())}`);
+      if (store && HOOKS.getTowers) {
         const towers = HOOKS.getTowers(state());
         const maxed = towers.filter(t => t.level >= t.maxLevel).length;
         parts.push(`towers ${towers.length} (${maxed} maxed)`);
@@ -554,23 +613,23 @@
   };
 
   // store isn't mounted at document-idle on every page, so poll for it
+  // the game component only exists while a round page is open, so it is looked
+  // up on every tick. a redux store (other pages) is picked up the same way
   let tries = 0;
-  const find = setInterval(() => {
-    store = findStore();
-    if (!store) {
-      if (++tries === 20) { print('no store after 10s'); diagnose(); }
-      return;
-    }
-    clearInterval(find);
-    wrapDispatch();
-    dot.classList.add('ok');
-    print('store found. press P for the menu.');
-    toast('dolp loaded. press P', 'ok');
-    setInterval(() => {
-      if (cfg.autoMax && HOOKS.setTowerLevel) maxTowers(true);
-      if (cfg.autoTokens && HOOKS.setTokens) setTokens(cfg.tokenAmount, true);
-      if (cfg.autoAnswer) autoAnswer(true);
-      refreshStatus();
-    }, 1000);
+  let seenGame = false;
+  toast('dolp loaded. press P', 'ok');
+  setInterval(() => {
+    if (!store) store = findStore();
+    if (store) wrapDispatch();
+    const g = getGame();
+    dot.classList.toggle('ok', !!(store || g));
+    if (g && !seenGame) { seenGame = true; print('game component found'); toast('game found', 'ok'); }
+    if (!g) seenGame = false;
+    if (!store && !g && ++tries === 20) { print('no store or game after 10s'); diagnose(); }
+    if (cfg.autoMax && HOOKS.setTowerLevel) maxTowers(true);
+    if (cfg.autoTokens) setTokens(cfg.tokenAmount, true);
+    if (cfg.autoHealth) setHealth(cfg.healthAmount, true);
+    if (cfg.autoAnswer) autoAnswer(true);
+    refreshStatus();
   }, 500);
 })();

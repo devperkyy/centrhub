@@ -75,7 +75,7 @@
   // ---------- styles ----------
   const CSS = `
     #dolp-panel{position:fixed;top:70px;left:20px;z-index:2147483647;width:580px;max-width:calc(100vw - 24px);
-      display:grid;grid-template-columns:124px minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) auto auto;
+      display:grid;grid-template-columns:124px minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) auto auto auto;
       color:#eceaff;font:12px/1.45 "Segoe UI",system-ui,sans-serif;overflow:hidden;
       border:1px solid transparent;border-radius:16px;
       background:linear-gradient(160deg,#1b1744,#0b1228) padding-box,
@@ -154,9 +154,12 @@
     .dolp-sw input:checked + span::after{transform:translateX(18px)}
     .dolp-sw input:focus-visible + span{box-shadow:0 0 0 3px rgba(124,92,255,.4)}
 
-    #dolp-status{grid-column:1/-1;grid-row:4;padding:7px 14px;border-top:1px solid rgba(255,255,255,.07);
+    #dolp-on{grid-column:1/-1;grid-row:4;padding:6px 14px;border-top:1px solid rgba(255,255,255,.07);
+      font-size:11px;color:#8d90b8}
+    #dolp-on span{color:#7df0c8;font-weight:600}
+    #dolp-status{grid-column:1/-1;grid-row:5;padding:7px 14px;border-top:1px solid rgba(255,255,255,.07);
       color:#8d90b8;font-size:11px;font-variant-numeric:tabular-nums}
-    #dolp-log{grid-column:1/-1;grid-row:5;margin:0;padding:8px 14px;height:72px;overflow:auto;
+    #dolp-log{grid-column:1/-1;grid-row:6;margin:0;padding:8px 14px;height:72px;overflow:auto;
       background:rgba(3,6,18,.7);white-space:pre-wrap;font:11px/1.45 Consolas,monospace;color:#b9c0e8}
 
     #dolp-toasts{position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;flex-direction:column;
@@ -297,7 +300,7 @@
     <div class="dolp-page" data-page="enemies">
       <div class="dolp-card"><h4>enemies</h4>
         <p>the enemy list is found by shape, so enemies must be on screen.</p>
-        <div class="dolp-btns">${btn('nuke', 'nuke all enemies', 'danger')}</div>
+        <div class="dolp-btns">${btn('nuke', 'nuke all enemies', 'danger')} ${btn('findEnemies', 'find enemies', 'ghost')}</div>
         ${num('slowMult', 'speed multiplier (x)')}
         ${sw('slowEnemies', 'scale enemy speed')}
         <div class="dolp-row"><span>enemies on screen</span><span data-stat="enemies">-</span></div>
@@ -354,6 +357,7 @@
       </div>
     </div>
 
+    <div id="dolp-on">running: <span data-on>nothing</span></div>
     <div id="dolp-status">status: waiting for store</div>
     <pre id="dolp-log"></pre>`;
   document.body.appendChild(panel);
@@ -721,7 +725,7 @@
   // active question as answered correctly (solo only)
   function skipQuestion(quiet = false) {
     const root = fiberRoot();
-    if (!root) return quiet || toast('no react fiber found', 'bad');
+    if (!root) { if (!quiet) toast('no react fiber found', 'bad'); return false; }
     let cb = null;
     for (const f of fibers(root)) {
       const p = f.memoizedProps;
@@ -730,9 +734,10 @@
         if (p.numCorrectsGoal != null) break;
       }
     }
-    if (!cb) return quiet || toast('no question component found', 'bad');
+    if (!cb) { if (!quiet) toast('no question component found', 'bad'); return false; }
     cb();
     if (!quiet) toast('question counted correct', 'ok');
+    return true;
   }
 
   // numeric fields on the game instance (outside react state/props) named like
@@ -837,21 +842,57 @@
   // so the multiplier works on the receiving end: every frame, any enemy whose
   // health dropped gets the extra (mult - 1) x that drop taken off as well.
   // the enemy list is found by shape: an array on the game with health/hp numbers
-  let enemyKey = null;
+  // once found, the holder and key are cached, so an empty list between rounds
+  // is still "found". a search that finds nothing is retried every 2 seconds
+  let enemyKey = null;        // path, for display
+  let enemyHolder = null;
+  let enemyProp = null;
   let enemyFor = null;
-  function enemyList(g) {
-    if (enemyFor !== g) { enemyFor = g; enemyKey = null; }
-    if (enemyKey && Array.isArray(g[enemyKey])) return g[enemyKey];
-    for (const k of Object.keys(g)) {
-      const v = g[k];
-      if (k === 'towers' || !Array.isArray(v) || !v.length) continue;
-      const e = v[0];
-      if (e && typeof e === 'object' && (typeof e.health === 'number' || typeof e.hp === 'number')) {
-        enemyKey = k;
-        return v;
+  let lastEnemyScan = 0;
+  const enemyLike = e => !!e && typeof e === 'object' && (typeof e.health === 'number' || typeof e.hp === 'number');
+
+  // breadth-first over the game instance, then its p5 board, for an array of
+  // enemy-like objects. capped so a big object graph cannot stall a frame
+  function scanForEnemies(g) {
+    const skip = new Set(['_reactInternals', '_reactInternalInstance', 'props', 'refs', 'updater', 'context', 'state', 'towers']);
+    const roots = [{ o: g, path: 'game', own: true }];
+    const p = p5Of(g);
+    if (p) roots.push({ o: p, path: 'p5', own: false });
+    const seen = new WeakSet();
+    let budget = 4000;
+    for (const root of roots) {
+      const queue = [{ o: root.o, path: root.path, d: 0 }];
+      while (queue.length && budget > 0) {
+        const { o, path, d } = queue.shift();
+        if (!o || typeof o !== 'object' || seen.has(o) || d > 5) continue;
+        if (o === window || (typeof Node !== 'undefined' && o instanceof Node)) continue;
+        seen.add(o);
+        budget--;
+        for (const k of Object.keys(o)) {
+          if (skip.has(k) || (!root.own && k[0] === '_')) continue;
+          let v;
+          try { v = o[k]; } catch (_) { continue; }
+          if (Array.isArray(v)) {
+            if (v.length && enemyLike(v[0])) return { holder: o, key: k, path: `${path}.${k}` };
+          } else if (v && typeof v === 'object') {
+            queue.push({ o: v, path: `${path}.${k}`, d: d + 1 });
+          }
+        }
       }
     }
     return null;
+  }
+
+  function enemyList(g) {
+    if (enemyFor !== g) { enemyFor = g; enemyHolder = null; enemyProp = null; enemyKey = null; lastEnemyScan = 0; }
+    if (enemyHolder && Array.isArray(enemyHolder[enemyProp])) return enemyHolder[enemyProp];
+    const now = Date.now();
+    if (now - lastEnemyScan < 2000) return null;
+    lastEnemyScan = now;
+    const hit = scanForEnemies(g);
+    if (!hit) return null;
+    enemyHolder = hit.holder; enemyProp = hit.key; enemyKey = hit.path;
+    return hit.holder[hit.key];
   }
 
   const seenHp = new WeakMap();
@@ -866,7 +907,9 @@
       const k = typeof e.health === 'number' ? 'health' : typeof e.hp === 'number' ? 'hp' : null;
       if (!k) continue;
       const prev = seenHp.get(e);
-      if (prev !== undefined && e[k] < prev) e[k] -= (prev - e[k]) * (m - 1);
+      if (prev !== undefined && e[k] < prev) {
+        try { e[k] -= (prev - e[k]) * (m - 1); } catch (_) { /* read-only health: nothing to scale */ }
+      }
       seenHp.set(e, e[k]);
     }
   }
@@ -1139,6 +1182,7 @@
       .find(e => !panel.contains(e) && /^\s*next( round)?\s*$/i.test(ownText(e)));
     if (!el) return;
     lastNext = Date.now();
+    print('auto next round: clicked "Next Round"');
     el.click();
   }
 
@@ -1272,17 +1316,51 @@
   }
 
   // ---------- enemies (list found by shape in enemyList) ----------
+  // zeroes health; if the property is read-only or the write does not stick,
+  // falls back to the enemy's own damage-style method
+  const HURT = ['takeDamage', 'damage', 'hurt', 'hit', 'dealDamage'];
+  function killEnemy(e) {
+    for (const k of ['health', 'hp']) {
+      if (typeof e[k] !== 'number') continue;
+      try { e[k] = 0; } catch (_) { /* read-only: try methods below */ }
+      if (e[k] === 0) return true;
+    }
+    for (const m of HURT) {
+      if (typeof e[m] !== 'function') continue;
+      try { e[m](1e12); } catch (_) { continue; }
+      return true;
+    }
+    return false;
+  }
+
   function nukeEnemies() {
     const g = needGame();
     if (!g) return;
+    lastEnemyScan = 0;
     const list = enemyList(g);
-    if (!list) return toast('enemy list not found. needs enemies on screen', 'bad');
+    if (!list) return toast('enemy list not found. start a round, then use "find enemies"', 'bad');
+    if (!list.length) return toast(`found ${enemyKey}, but no enemies right now`, 'dim');
     let n = 0;
-    for (const e of list) {
-      const k = e && typeof e === 'object' && (typeof e.health === 'number' ? 'health' : typeof e.hp === 'number' ? 'hp' : null);
-      if (k) { e[k] = 0; n++; }
+    for (const e of list) if (enemyLike(e) && killEnemy(e)) n++;
+    print(`nuke: ${enemyKey} has ${list.length}, hit ${n}`);
+    toast(n ? `${n} enem${n > 1 ? 'ies' : 'y'} down` : 'enemies found but health would not change', n ? 'ok' : 'bad');
+  }
+
+  // forces a search and prints where the enemies live and what one looks like
+  function findEnemies() {
+    const g = needGame();
+    if (!g) return;
+    lastEnemyScan = 0;
+    enemyHolder = null;
+    const list = enemyList(g);
+    if (!list) return print('enemies: not found (start a round first, enemies must be on screen)');
+    print(`enemies: ${enemyKey} (${list.length})`);
+    const e = list[0];
+    if (e) {
+      print('first: ' + brief(e));
+      print('numbers: ' + numFields(e).map(k => `${k}=${e[k]}`).join(', '));
+      print('methods: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(e)).filter(k => typeof e[k] === 'function').join(', '));
     }
-    toast(n ? `${n} enem${n > 1 ? 'ies' : 'y'} down` : 'no enemies with health', n ? 'ok' : 'dim');
   }
 
   // scales an enemy's speed-like field every frame, from the original value.
@@ -1312,7 +1390,7 @@
       const r = slowRec.get(e);
       const base = r && e[f] === r.last ? r.base : e[f];
       const next = base * m;
-      e[f] = next;
+      try { e[f] = next; } catch (_) { continue; }
       slowRec.set(e, { f, base, last: next });
       slowed.add(e);
     }
@@ -1414,6 +1492,7 @@
     applyBuff: () => applyBuff(false),
     resetBuffs, buffRange, buffSpeed, buffDamage, listFields,
     nuke: nukeEnemies,
+    findEnemies,
     applyFps: () => setFps(cfg.fps),
     resetFps: () => setFps(60),
     saveSnap, restoreSnap, resetStats, killAll,
@@ -1483,6 +1562,7 @@
     stepsEl.textContent = stepCount();
     const g = getGame();
     const setText = (sel, v) => { const el = panel.querySelector(sel); if (el) el.textContent = v; };
+    setText('[data-on]', AUTO_FLAGS.filter(k => cfg[k]).join(', ') || 'nothing');
     const secs = Math.floor((Date.now() - statsStart) / 1000);
     setText('[data-stat="time"]', `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`);
     setText('[data-stat="steps"]', stepCount());
@@ -1522,6 +1602,8 @@
   let tries = 0;
   let seenGame = false;
   let lastSkip = 0;
+  let turboWas = false;
+  let force2xWas = false;
   toast('dolp loaded. press P', 'ok');
   setInterval(() => {
     if (!store) store = findStore();
@@ -1549,8 +1631,16 @@
     if (g && cfg.autoRevive && g.state.gameOver) {
       g.setState({ gameOver: false, health: Math.max(1, Number(cfg.healthAmount) || 100) });
     }
-    if (cfg.autoSkip && Date.now() - lastSkip > 1200) { lastSkip = Date.now(); skipQuestion(true); }
+    if (cfg.autoSkip && Date.now() - lastSkip > 1200) {
+      lastSkip = Date.now();
+      if (skipQuestion(true)) print('auto skip: counted a question');
+    }
+    // switching these off has to undo what they left behind in the game
     if (g && cfg.turbo) setFps(cfg.fps, true);
+    else if (turboWas) setFps(60, true);
+    turboWas = cfg.turbo;
+    if (g && force2xWas && !cfg.force2x && g.state.doubleSpeed) g.setState({ doubleSpeed: false });
+    force2xWas = cfg.force2x;
     if (g) statsTick(g);
     refreshStatus();
   }, 500);

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         blooket tower mod
 // @namespace    centrhub
-// @version      0.3.0
-// @description  tower defense menu (P): towers, economy, solo answers, misc, config
+// @version      0.4.0
+// @description  tower defense menu (P): towers, economy, game, buffs, enemies, stats, solo, misc, config
 // @match        https://www.blooket.com/*
 // @match        https://blooket.com/*
 // @grant        none
@@ -57,6 +57,13 @@
     choiceSelector: '',
     scanDepth: 8,
     logDispatch: false,
+    autoRevive: false,
+    autoSkip: false,
+    slowEnemies: false,
+    slowMult: 0.5,
+    turbo: false,
+    fps: 120,
+    profile: '',
   };
   const CFG_KEY = 'dolp-blooket-cfg';
   const POS_KEY = 'dolp-blooket-pos';
@@ -67,58 +74,103 @@
 
   // ---------- styles ----------
   const CSS = `
-    #dolp-panel{position:fixed;top:80px;left:20px;z-index:2147483647;width:420px;
-      background:#121218;color:#e6e6ee;font:12px/1.45 Consolas,"Segoe UI",monospace;
-      border:1px solid #2a2a36;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.55);
-      opacity:0;transform:translateY(-8px) scale(.98);pointer-events:none;
-      transition:opacity .22s ease,transform .22s cubic-bezier(.2,.8,.2,1)}
+    #dolp-panel{position:fixed;top:70px;left:20px;z-index:2147483647;width:580px;max-width:calc(100vw - 24px);
+      display:grid;grid-template-columns:124px minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) auto auto;
+      color:#eceaff;font:12px/1.45 "Segoe UI",system-ui,sans-serif;overflow:hidden;
+      border:1px solid transparent;border-radius:16px;
+      background:linear-gradient(160deg,#1b1744,#0b1228) padding-box,
+                 linear-gradient(135deg,#7c5cff,#2fd4ff 55%,#ff5ca8) border-box;
+      box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 44px rgba(124,92,255,.2);
+      opacity:0;transform:translateY(-10px) scale(.97);pointer-events:none;
+      transition:opacity .25s ease,transform .3s cubic-bezier(.2,.9,.2,1)}
     #dolp-panel.open{opacity:1;transform:none;pointer-events:auto}
-    #dolp-head{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#1b1b24;
-      border-radius:10px 10px 0 0;cursor:move;user-select:none}
-    #dolp-head .dot{width:8px;height:8px;border-radius:50%;background:#555;transition:background .3s,box-shadow .3s}
-    #dolp-head .dot.ok{background:#3ddc84;box-shadow:0 0 8px #3ddc84}
-    #dolp-head .title{flex:1;font-weight:600;letter-spacing:.3px}
-    #dolp-head .key{opacity:.5;font-size:11px;border:1px solid #33334a;border-radius:4px;padding:0 5px}
-    #dolp-tabs{display:flex;gap:2px;padding:6px;background:#15151d;border-bottom:1px solid #2a2a36}
-    .dolp-tab{flex:1;background:none;border:0;color:#8a8aa3;padding:6px 2px;border-radius:6px;cursor:pointer;
-      font:inherit;transition:background .2s,color .2s}
-    .dolp-tab:hover{color:#e6e6ee;background:#1e1e28}
-    .dolp-tab.on{color:#fff;background:#2a2a3c}
-    .dolp-page{display:none;padding:10px;max-height:300px;overflow:auto}
-    .dolp-page.on{display:block;animation:dolpIn .25s ease}
-    @keyframes dolpIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-    .dolp-card{background:#1a1a24;border:1px solid #262634;border-radius:8px;padding:8px;margin-bottom:8px}
-    .dolp-card h4{margin:0 0 6px;font-size:10px;letter-spacing:.9px;text-transform:uppercase;color:#8a8aa3;font-weight:600}
-    .dolp-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0}
-    .dolp-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-    .dolp-btn{background:#23233a;color:#e6e6ee;border:1px solid #33334a;border-radius:6px;padding:5px 9px;
-      cursor:pointer;font:inherit;transition:transform .12s,background .2s,border-color .2s}
-    .dolp-btn:hover{background:#2c2c48;border-color:#4a4a6a}
-    .dolp-btn:active{transform:scale(.95)}
-    .dolp-in{background:#0e0e14;color:#e6e6ee;border:1px solid #33334a;border-radius:6px;padding:3px 6px;
-      width:86px;font:inherit;transition:border-color .2s}
-    .dolp-in.wide{width:170px}
-    .dolp-in:focus{outline:none;border-color:#7c6cff}
-    .dolp-sw{position:relative;width:34px;height:18px;flex:none}
+    #dolp-panel *{box-sizing:border-box}
+
+    #dolp-head{grid-column:1/-1;grid-row:1;display:flex;align-items:center;gap:10px;padding:10px 14px;
+      cursor:move;user-select:none;
+      background:linear-gradient(90deg,rgba(124,92,255,.38),rgba(47,212,255,.16) 62%,transparent)}
+    #dolp-head .dot{width:9px;height:9px;border-radius:50%;background:#4b4f78;transition:background .3s,box-shadow .3s}
+    #dolp-head .dot.ok{background:#3ddc84;box-shadow:0 0 10px #3ddc84}
+    #dolp-head .title{flex:1;font-weight:700;font-size:13px;letter-spacing:.5px;
+      background:linear-gradient(90deg,#fff,#b9b4ff 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
+    #dolp-head .key{font-size:11px;font-weight:700;color:#b9b4ff;border:1px solid rgba(185,180,255,.35);
+      border-radius:6px;padding:0 7px}
+
+    #dolp-chips{grid-column:1/-1;grid-row:2;display:flex;gap:8px;padding:2px 14px 12px}
+    .dolp-chip{flex:1;min-width:0;padding:7px 10px;border-radius:11px;
+      background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.07)}
+    .dolp-chip small{display:block;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#8d90b8}
+    .dolp-chip b{display:block;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;
+      overflow:hidden;text-overflow:ellipsis;
+      background:linear-gradient(90deg,var(--c1),var(--c2));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+    #dolp-tabs{grid-column:1;grid-row:3;display:flex;flex-direction:column;gap:3px;padding:8px;
+      background:rgba(0,0,0,.2);border-right:1px solid rgba(255,255,255,.06)}
+    .dolp-tab{position:relative;text-align:left;background:none;border:0;color:#8d90b8;font:inherit;font-weight:600;
+      padding:8px 10px 8px 15px;border-radius:9px;cursor:pointer;transition:color .2s,background .25s}
+    .dolp-tab::before{content:"";position:absolute;left:5px;top:9px;bottom:9px;width:3px;border-radius:3px;
+      background:linear-gradient(#7c5cff,#2fd4ff);opacity:0;transform:scaleY(.3);transition:opacity .25s,transform .25s}
+    .dolp-tab:hover{color:#fff;background:rgba(255,255,255,.05)}
+    .dolp-tab.on{color:#fff;background:linear-gradient(90deg,rgba(124,92,255,.34),rgba(47,212,255,.07))}
+    .dolp-tab.on::before{opacity:1;transform:none}
+
+    .dolp-page{grid-column:2;grid-row:3;display:none;padding:12px;max-height:clamp(170px,calc(100vh - 340px),380px);overflow:auto}
+    .dolp-page.on{display:block;animation:dolpIn .3s cubic-bezier(.2,.9,.2,1)}
+    @keyframes dolpIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    .dolp-page::-webkit-scrollbar,#dolp-log::-webkit-scrollbar{width:8px}
+    .dolp-page::-webkit-scrollbar-thumb,#dolp-log::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:8px}
+
+    .dolp-card{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:10px 12px;margin-bottom:10px}
+    .dolp-card h4{margin:0 0 8px;font-size:10px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;
+      background:linear-gradient(90deg,#a99bff,#6fe3ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .dolp-card p{margin:0 0 8px;color:#8d90b8;font-size:11px}
+    .dolp-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0}
+    .dolp-row > span:first-child{color:#d6d4f5}
+    .dolp-btns{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0}
+
+    .dolp-btn{border:0;color:#fff;font:inherit;font-weight:600;padding:6px 12px;border-radius:9px;cursor:pointer;
+      background:linear-gradient(135deg,#6a55ff,#2aa8ff);box-shadow:0 4px 14px rgba(70,90,255,.28);
+      transition:transform .15s,box-shadow .2s,filter .2s}
+    .dolp-btn:hover{filter:brightness(1.14);box-shadow:0 6px 20px rgba(70,120,255,.42);transform:translateY(-1px)}
+    .dolp-btn:active{transform:scale(.96)}
+    .dolp-btn.ghost{background:rgba(255,255,255,.08);box-shadow:none}
+    .dolp-btn.danger{background:linear-gradient(135deg,#ff5c7a,#ff8a4a);box-shadow:0 4px 14px rgba(255,92,122,.28)}
+    .dolp-btn.small{padding:3px 10px;font-size:11px}
+
+    .dolp-in{background:rgba(5,8,22,.7);color:#eceaff;border:1px solid rgba(255,255,255,.1);border-radius:8px;
+      padding:5px 8px;width:96px;font:inherit;transition:border-color .2s,box-shadow .2s}
+    .dolp-in.wide{width:190px}
+    .dolp-in:focus{outline:none;border-color:#7c5cff;box-shadow:0 0 0 3px rgba(124,92,255,.25)}
+    select.dolp-in option{background:#12163a;color:#eceaff}
+
+    .dolp-sw{position:relative;width:38px;height:20px;flex:none}
     .dolp-sw input{opacity:0;width:0;height:0;position:absolute}
-    .dolp-sw span{position:absolute;inset:0;background:#33334a;border-radius:18px;transition:background .25s}
-    .dolp-sw span::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;
-      background:#e6e6ee;border-radius:50%;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
-    .dolp-sw input:checked + span{background:#7c6cff}
-    .dolp-sw input:checked + span::after{transform:translateX(16px)}
-    .dolp-sw input:focus-visible + span{box-shadow:0 0 0 2px #7c6cff}
-    #dolp-status{padding:6px 10px;border-top:1px solid #2a2a36;color:#9a9ab0;font-size:11px}
-    #dolp-log{margin:0;padding:8px;height:120px;overflow:auto;background:#0e0e14;border-top:1px solid #2a2a36;
-      white-space:pre-wrap;font-size:11px;border-radius:0 0 10px 10px}
+    .dolp-sw span{position:absolute;inset:0;background:rgba(255,255,255,.14);border-radius:20px;transition:background .25s,box-shadow .25s}
+    .dolp-sw span::after{content:"";position:absolute;left:3px;top:3px;width:14px;height:14px;background:#fff;border-radius:50%;
+      box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .28s cubic-bezier(.2,.9,.2,1)}
+    .dolp-sw input:checked + span{background:linear-gradient(135deg,#7c5cff,#2fd4ff);box-shadow:0 0 14px rgba(90,140,255,.45)}
+    .dolp-sw input:checked + span::after{transform:translateX(18px)}
+    .dolp-sw input:focus-visible + span{box-shadow:0 0 0 3px rgba(124,92,255,.4)}
+
+    #dolp-status{grid-column:1/-1;grid-row:4;padding:7px 14px;border-top:1px solid rgba(255,255,255,.07);
+      color:#8d90b8;font-size:11px;font-variant-numeric:tabular-nums}
+    #dolp-log{grid-column:1/-1;grid-row:5;margin:0;padding:8px 14px;height:72px;overflow:auto;
+      background:rgba(3,6,18,.7);white-space:pre-wrap;font:11px/1.45 Consolas,monospace;color:#b9c0e8}
+
     #dolp-toasts{position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;flex-direction:column;
-      align-items:flex-end;gap:6px;pointer-events:none}
-    .dolp-toast{background:#1b1b24;border:1px solid #2a2a36;border-left:3px solid #7c6cff;color:#e6e6ee;
-      padding:7px 12px;border-radius:6px;font:12px Consolas,monospace;opacity:0;transform:translateX(24px);
-      transition:opacity .25s,transform .25s cubic-bezier(.2,.8,.2,1)}
+      align-items:flex-end;gap:7px;pointer-events:none}
+    .dolp-toast{background:linear-gradient(135deg,#1b1744,#101a38);border:1px solid rgba(255,255,255,.1);
+      border-left:3px solid #7c5cff;color:#eceaff;padding:8px 14px;border-radius:10px;font:12px "Segoe UI",system-ui,sans-serif;
+      box-shadow:0 8px 24px rgba(0,0,0,.45);opacity:0;transform:translateX(26px);
+      transition:opacity .25s,transform .3s cubic-bezier(.2,.9,.2,1)}
     .dolp-toast.show{opacity:1;transform:none}
     .dolp-toast.ok{border-left-color:#3ddc84}
     .dolp-toast.bad{border-left-color:#ff5c7a}
-    .dolp-toast.dim{border-left-color:#555}
+    .dolp-toast.dim{border-left-color:#6b6f99}
+
+    @media (max-width:640px){#dolp-panel{grid-template-columns:96px minmax(0,1fr)}.dolp-chip b{font-size:13px}}
     @media (prefers-reduced-motion:reduce){#dolp-panel,#dolp-panel *,#dolp-toasts *{transition:none!important;animation:none!important}}
   `;
   const style = document.createElement('style');
@@ -132,17 +184,33 @@
     <input class="dolp-in ${cls}" type="number" data-cfg="${k}"></label>`;
   const txt = (k, label) => `<label class="dolp-row"><span>${label}</span>
     <input class="dolp-in wide" type="text" data-cfg="${k}" spellcheck="false"></label>`;
-  const btn = (act, label) => `<button class="dolp-btn" data-act="${act}">${label}</button>`;
+  const btn = (act, label, cls = '') => `<button class="dolp-btn ${cls}" data-act="${act}">${label}</button>`;
+  const chip = (k, label, c1, c2) => `<div class="dolp-chip" style="--c1:${c1};--c2:${c2}">
+    <small>${label}</small><b data-chip="${k}">-</b></div>`;
+  const stat = (k, label) => `<div class="dolp-row"><span>${label}</span><span data-stat="${k}">-</span></div>`;
 
   const panel = document.createElement('div');
   panel.id = 'dolp-panel';
   panel.innerHTML = `
-    <div id="dolp-head"><span class="dot"></span><span class="title">dolp / blooket</span><span class="key">P</span></div>
+    <div id="dolp-head">
+      <span class="dot"></span><span class="title">dolp / blooket</span>
+      ${btn('killAll', 'stop all [K]', 'danger small')}
+      <span class="key">P</span>
+    </div>
+    <div id="dolp-chips">
+      ${chip('tokens', 'tokens', '#ffd36b', '#ff9f45')}
+      ${chip('health', 'health', '#ff8aa8', '#ff5c7a')}
+      ${chip('round', 'round', '#9ab4ff', '#7c5cff')}
+      ${chip('towers', 'towers', '#7df0c8', '#2fd4ff')}
+      ${chip('dps', 'dps', '#ffb4f0', '#ff5ca8')}
+    </div>
     <div id="dolp-tabs">
       <button class="dolp-tab" data-tab="towers">towers</button>
       <button class="dolp-tab" data-tab="economy">economy</button>
       <button class="dolp-tab" data-tab="game">game</button>
       <button class="dolp-tab" data-tab="buffs">buffs</button>
+      <button class="dolp-tab" data-tab="enemies">enemies</button>
+      <button class="dolp-tab" data-tab="stats">stats</button>
       <button class="dolp-tab" data-tab="solo">solo</button>
       <button class="dolp-tab" data-tab="misc">misc</button>
       <button class="dolp-tab" data-tab="config">config</button>
@@ -150,28 +218,21 @@
 
     <div class="dolp-page" data-page="towers">
       <div class="dolp-card"><h4>upgrades</h4>
+        <p>upgrade one tower by hand first. each step is recorded, then replayed on the others.</p>
         <div class="dolp-btns">${btn('maxTowers', 'max all [F6]')} ${btn('maxType', 'max same type')} ${btn('maxSel', 'max selected')}</div>
-        <div class="dolp-btns">${btn('inspectTowers', 'inspect towers')}</div>
-        ${sw('autoMax', 'auto max every second')}
-      </div>
-      <div class="dolp-card"><h4>health</h4>
-        ${num('healthAmount', 'set to')}
-        <div class="dolp-btns">${btn('setHealth', 'set health')}</div>
-        ${sw('autoHealth', 'keep health topped up')}
-        ${sw('invincible', 'invincible (health never drops)')}
+        ${sw('autoMax', 'auto max every tick')}
+        ${sw('syncUpgrades', 'upgrade all matching towers')}
+        <div class="dolp-row"><span>upgrade steps recorded</span><span data-steps>0</span></div>
       </div>
       <div class="dolp-card"><h4>build</h4>
         ${sw('dragPlace', 'drag to place towers')}
         <div class="dolp-row"><span>tower</span><span data-chosen>none chosen</span></div>
-        ${sw('syncUpgrades', 'upgrade all matching towers')}
-        <div class="dolp-row"><span>upgrade steps recorded</span><span data-steps>0</span></div>
       </div>
       <div class="dolp-card"><h4>delete</h4>
-        <div class="dolp-btns">${btn('deleteSelected', 'selected')} ${btn('deleteMatching', 'same type')} ${btn('deleteAll', 'all towers')}</div>
+        <div class="dolp-btns">${btn('deleteSelected', 'selected', 'danger')} ${btn('deleteMatching', 'same type', 'danger')} ${btn('deleteAll', 'all towers', 'danger')}</div>
       </div>
-      <div class="dolp-card"><h4>damage</h4>
-        ${num('damageMult', 'multiplier (x)')}
-        ${sw('damageBoost', 'multiply damage dealt')}
+      <div class="dolp-card"><h4>inspect</h4>
+        <div class="dolp-btns">${btn('inspectTowers', 'inspect towers', 'ghost')}</div>
       </div>
     </div>
 
@@ -180,22 +241,33 @@
         ${num('tokenAmount', 'set to')}
         ${num('tokenStep', 'step')}
         <div class="dolp-btns">${btn('setTokens', 'set [F7]')} ${btn('addTokens', '+ step')}</div>
-        ${sw('autoTokens', 'auto set every second')}
+        ${sw('autoTokens', 'keep set every tick')}
       </div>
     </div>
 
     <div class="dolp-page" data-page="game">
       <div class="dolp-card"><h4>rounds</h4>
         ${num('roundTarget', 'round')}
-        <div class="dolp-btns">${btn('setRound', 'set round')} ${btn('skipRound', 'skip round')} ${btn('revive', 'revive')}</div>
+        <div class="dolp-btns">${btn('setRound', 'set round')} ${btn('skipRound', 'skip round')}</div>
         ${sw('autoNext', 'auto next round')}
+      </div>
+      <div class="dolp-card"><h4>survival</h4>
+        ${num('healthAmount', 'health')}
+        <div class="dolp-btns">${btn('setHealth', 'set health')} ${btn('revive', 'revive')}</div>
+        ${sw('autoHealth', 'keep health topped up')}
+        ${sw('invincible', 'invincible (health never drops)')}
+        ${sw('autoRevive', 'auto revive on game over')}
       </div>
       <div class="dolp-card"><h4>speed</h4>
         <div class="dolp-btns">${btn('togglePause', 'pause / resume')} ${btn('toggleSpeed', 'toggle 2x')}</div>
         ${sw('force2x', 'keep 2x speed on')}
+        ${num('fps', 'turbo frame rate')}
+        <div class="dolp-btns">${btn('applyFps', 'apply fps')} ${btn('resetFps', 'back to 60', 'ghost')}</div>
+        ${sw('turbo', 'hold turbo frame rate')}
       </div>
-      <div class="dolp-card"><h4>questions (solo)</h4>
-        <div class="dolp-btns">${btn('skipQuestion', 'skip question')}</div>
+      <div class="dolp-card"><h4>snapshot (numbers only)</h4>
+        <p>saves tokens, health and round. restoring does not bring back towers.</p>
+        <div class="dolp-btns">${btn('saveSnap', 'save')} ${btn('restoreSnap', 'restore')}</div>
       </div>
     </div>
 
@@ -208,17 +280,49 @@
             <option value="all">all towers</option>
           </select></label>
       </div>
-      <div class="dolp-card"><h4>buff</h4>
-        <div class="dolp-btns">${btn('buffRange', 'range')} ${btn('buffSpeed', 'speed')} ${btn('buffDamage', 'damage')} ${btn('listFields', 'list fields')}</div>
+      <div class="dolp-card"><h4>stat buff</h4>
+        <div class="dolp-btns">${btn('buffRange', 'range')} ${btn('buffSpeed', 'speed')} ${btn('buffDamage', 'damage')} ${btn('listFields', 'list fields', 'ghost')}</div>
         ${txt('buffField', 'field')}
         ${num('buffMult', 'multiplier (x)')}
-        <div class="dolp-btns">${btn('applyBuff', 'apply')} ${btn('resetBuffs', 'reset')}</div>
+        <div class="dolp-btns">${btn('applyBuff', 'apply')} ${btn('resetBuffs', 'reset', 'ghost')}</div>
         ${sw('buffAuto', 're-apply every tick')}
+      </div>
+      <div class="dolp-card"><h4>damage dealt</h4>
+        <p>needs enemies on screen so the enemy list can be found.</p>
+        ${num('damageMult', 'multiplier (x)')}
+        ${sw('damageBoost', 'multiply damage dealt')}
+      </div>
+    </div>
+
+    <div class="dolp-page" data-page="enemies">
+      <div class="dolp-card"><h4>enemies</h4>
+        <p>the enemy list is found by shape, so enemies must be on screen.</p>
+        <div class="dolp-btns">${btn('nuke', 'nuke all enemies', 'danger')}</div>
+        ${num('slowMult', 'speed multiplier (x)')}
+        ${sw('slowEnemies', 'scale enemy speed')}
+        <div class="dolp-row"><span>enemies on screen</span><span data-stat="enemies">-</span></div>
+      </div>
+    </div>
+
+    <div class="dolp-page" data-page="stats">
+      <div class="dolp-card"><h4>damage</h4>
+        ${stat('dps', 'dps (5s average)')}
+        ${stat('peak', 'peak dps')}
+        ${stat('total', 'total damage this session')}
+      </div>
+      <div class="dolp-card"><h4>session</h4>
+        ${stat('time', 'time')}
+        ${stat('steps', 'upgrade steps recorded')}
+        <div class="dolp-btns">${btn('resetStats', 'reset stats', 'ghost')}</div>
       </div>
     </div>
 
     <div class="dolp-page" data-page="solo">
-      <div class="dolp-card"><h4>auto answer (solo only)</h4>
+      <div class="dolp-card"><h4>questions (solo only)</h4>
+        <div class="dolp-btns">${btn('skipQuestion', 'skip question')}</div>
+        ${sw('autoSkip', 'auto skip questions')}
+      </div>
+      <div class="dolp-card"><h4>auto answer</h4>
         ${sw('autoAnswer', 'enabled [F9]')}
         ${num('answerDelay', 'delay ms')}
         ${num('answerJitter', 'jitter ms')}
@@ -228,19 +332,25 @@
     </div>
 
     <div class="dolp-page" data-page="misc">
-      <div class="dolp-card"><h4>state</h4>
-        <div class="dolp-btns">${btn('scan', 'scan [F8]')} ${btn('dump', 'dump to clipboard')} ${btn('hookTest', 'hook test')} ${btn('scanFibers', 'scan components')} ${btn('traceBuy', 'trace buy / upgrade')}</div>
+      <div class="dolp-card"><h4>scan</h4>
+        <div class="dolp-btns">${btn('scan', 'scan [F8]', 'ghost')} ${btn('dump', 'dump to clipboard', 'ghost')} ${btn('hookTest', 'hook test', 'ghost')} ${btn('scanFibers', 'scan components', 'ghost')}</div>
+        ${num('scanDepth', 'scan depth')}
+      </div>
+      <div class="dolp-card"><h4>trace</h4>
+        <div class="dolp-btns">${btn('traceBuy', 'trace buy / upgrade', 'ghost')}</div>
         ${sw('logDispatch', 'log dispatched actions')}
         ${sw('watchState', 'log game state changes')}
-        ${num('scanDepth', 'scan depth')}
       </div>
     </div>
 
     <div class="dolp-page" data-page="config">
-      <div class="dolp-card"><h4>config</h4>
-        <textarea data-cfgbox spellcheck="false" style="box-sizing:border-box;width:100%;height:90px;
-          background:#0e0e14;color:#e6e6ee;border:1px solid #33334a;border-radius:6px;font:inherit;padding:6px"></textarea>
-        <div class="dolp-btns">${btn('export', 'export')} ${btn('import', 'import')} ${btn('reset', 'reset')}</div>
+      <div class="dolp-card"><h4>profiles</h4>
+        ${txt('profile', 'name')}
+        <div class="dolp-btns">${btn('saveProfile', 'save')} ${btn('loadProfile', 'load')} ${btn('deleteProfile', 'delete', 'danger')} ${btn('listProfiles', 'list', 'ghost')}</div>
+      </div>
+      <div class="dolp-card"><h4>config json</h4>
+        <textarea data-cfgbox spellcheck="false" class="dolp-in" style="width:100%;height:90px;resize:vertical"></textarea>
+        <div class="dolp-btns">${btn('export', 'export')} ${btn('import', 'import')} ${btn('reset', 'reset', 'danger')}</div>
       </div>
     </div>
 
@@ -609,9 +719,9 @@
 
   // the question component takes an onCorrect callback. calling it counts the
   // active question as answered correctly (solo only)
-  function skipQuestion() {
+  function skipQuestion(quiet = false) {
     const root = fiberRoot();
-    if (!root) return toast('no react fiber found', 'bad');
+    if (!root) return quiet || toast('no react fiber found', 'bad');
     let cb = null;
     for (const f of fibers(root)) {
       const p = f.memoizedProps;
@@ -620,9 +730,9 @@
         if (p.numCorrectsGoal != null) break;
       }
     }
-    if (!cb) return toast('no question component found', 'bad');
+    if (!cb) return quiet || toast('no question component found', 'bad');
     cb();
-    toast('question counted correct', 'ok');
+    if (!quiet) toast('question counted correct', 'ok');
   }
 
   // numeric fields on the game instance (outside react state/props) named like
@@ -1134,6 +1244,163 @@
       () => print('clipboard denied. state on window.__dolpState'));
   };
 
+  // ---------- stats: dps from the game's own totalDamage counter ----------
+  const fmt = n => (typeof n !== 'number' || !isFinite(n) ? '-'
+    : Math.abs(n) >= 1e9 ? n.toExponential(2) : Math.round(n).toLocaleString());
+  const dmgLog = [];
+  let dps = 0;
+  let peakDps = 0;
+  let dmgStart = null;
+  let statsStart = Date.now();
+
+  function statsTick(g) {
+    const d = g.state.totalDamage;
+    if (typeof d !== 'number') return;
+    const now = Date.now();
+    if (dmgStart === null) dmgStart = d;
+    dmgLog.push({ t: now, d });
+    while (dmgLog.length > 1 && now - dmgLog[0].t > 5000) dmgLog.shift();
+    const f = dmgLog[0];
+    dps = now > f.t ? Math.max(0, (d - f.d) / ((now - f.t) / 1000)) : 0;
+    if (dps > peakDps) peakDps = dps;
+  }
+
+  function resetStats() {
+    dmgLog.length = 0;
+    dps = 0; peakDps = 0; dmgStart = null; statsStart = Date.now();
+    toast('stats reset', 'dim');
+  }
+
+  // ---------- enemies (list found by shape in enemyList) ----------
+  function nukeEnemies() {
+    const g = needGame();
+    if (!g) return;
+    const list = enemyList(g);
+    if (!list) return toast('enemy list not found. needs enemies on screen', 'bad');
+    let n = 0;
+    for (const e of list) {
+      const k = e && typeof e === 'object' && (typeof e.health === 'number' ? 'health' : typeof e.hp === 'number' ? 'hp' : null);
+      if (k) { e[k] = 0; n++; }
+    }
+    toast(n ? `${n} enem${n > 1 ? 'ies' : 'y'} down` : 'no enemies with health', n ? 'ok' : 'dim');
+  }
+
+  // scales an enemy's speed-like field every frame, from the original value.
+  // if the game rewrites its own value each frame, that value becomes the base
+  const slowRec = new WeakMap();
+  const slowed = new Set();
+  function enemyLoop() {
+    requestAnimationFrame(enemyLoop);
+    const m = Number(cfg.slowMult);
+    if (!cfg.slowEnemies || !m || m < 0 || !alive(game)) {
+      if (slowed.size) {
+        for (const e of slowed) {
+          const r = slowRec.get(e);
+          if (r && e[r.f] === r.last) e[r.f] = r.base;
+        }
+        slowed.clear();
+      }
+      return;
+    }
+    const list = enemyList(game);
+    if (!list) return;
+    if (slowed.size > 300) slowed.clear();
+    for (const e of list) {
+      if (!e || typeof e !== 'object') continue;
+      const f = Object.keys(e).find(k => /speed|^spd$|vel/i.test(k) && typeof e[k] === 'number');
+      if (!f) continue;
+      const r = slowRec.get(e);
+      const base = r && e[f] === r.last ? r.base : e[f];
+      const next = base * m;
+      e[f] = next;
+      slowRec.set(e, { f, base, last: next });
+      slowed.add(e);
+    }
+  }
+  requestAnimationFrame(enemyLoop);
+
+  // ---------- turbo frame rate (p5 instance rides on tower objects) ----------
+  function p5Of(g) {
+    const t = (g.towers || []).find(x => x && x.p5);
+    const p = (t && t.p5) || (g.state.buyTower && g.state.buyTower.p5) || (g.state.towerSelected && g.state.towerSelected.p5);
+    return p && typeof p.frameRate === 'function' ? p : null;
+  }
+  function setFps(n, quiet = false) {
+    const g = getGame();
+    const p = g && p5Of(g);
+    if (!p) return quiet || toast('board not found. place a tower first', 'bad');
+    const v = Math.max(1, Math.min(240, Number(n) || 60));
+    p.frameRate(v);
+    if (!quiet) toast(`frame rate ${v}`, 'ok');
+  }
+
+  // ---------- snapshots (numbers only) ----------
+  const SNAP_KEY = 'dolp-blooket-snap';
+  function saveSnap() {
+    const g = needGame();
+    if (!g) return;
+    const s = { tokens: g.state.tokens, health: g.state.health, round: g.state.round };
+    try { localStorage.setItem(SNAP_KEY, JSON.stringify(s)); } catch (_) { return toast('storage blocked', 'bad'); }
+    toast(`saved: ${fmt(s.tokens)} tokens, round ${s.round}`, 'ok');
+  }
+  function restoreSnap() {
+    const g = needGame();
+    if (!g) return;
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(SNAP_KEY)); } catch (_) {}
+    if (!s) return toast('no snapshot saved', 'bad');
+    setTokens(s.tokens, true);
+    setHealth(s.health, true);
+    g.setState({ round: s.round });
+    toast('snapshot restored', 'ok');
+  }
+
+  // ---------- config profiles ----------
+  const PROF_KEY = 'dolp-blooket-profiles';
+  const readProfiles = () => { try { return JSON.parse(localStorage.getItem(PROF_KEY)) || {}; } catch (_) { return {}; } };
+  const writeProfiles = p => { try { localStorage.setItem(PROF_KEY, JSON.stringify(p)); } catch (_) {} };
+  const profName = () => String(cfg.profile || '').trim();
+  function saveProfile() {
+    const n = profName();
+    if (!n) return toast('name the profile first', 'bad');
+    const all = readProfiles();
+    const copy = { ...cfg };
+    delete copy.profile;
+    all[n] = copy;
+    writeProfiles(all);
+    toast(`saved "${n}"`, 'ok');
+  }
+  function loadProfile() {
+    const n = profName();
+    const p = readProfiles()[n];
+    if (!p) return toast('no profile with that name', 'bad');
+    Object.assign(cfg, DEFAULTS, p, { profile: n });
+    saveCfg(); syncFields();
+    toast(`loaded "${n}"`, 'ok');
+  }
+  function deleteProfile() {
+    const n = profName();
+    const all = readProfiles();
+    if (!all[n]) return toast('no profile with that name', 'bad');
+    delete all[n];
+    writeProfiles(all);
+    toast(`deleted "${n}"`, 'dim');
+  }
+  const listProfiles = () => print('profiles: ' + (Object.keys(readProfiles()).join(', ') || 'none'));
+
+  // ---------- kill switch ----------
+  const AUTO_FLAGS = ['autoMax', 'autoTokens', 'autoHealth', 'invincible', 'dragPlace', 'syncUpgrades',
+    'damageBoost', 'autoAnswer', 'autoNext', 'force2x', 'buffAuto', 'watchState', 'autoRevive', 'autoSkip',
+    'slowEnemies', 'turbo', 'logDispatch'];
+  function killAll() {
+    for (const k of AUTO_FLAGS) cfg[k] = false;
+    saveCfg(); syncFields();
+    resetBuffs();
+    setFps(60, true);
+    panel.classList.remove('open');
+    toast('everything off', 'dim');
+  }
+
   // ---------- actions (buttons) ----------
   const actions = {
     maxTowers: () => maxTowers(false),
@@ -1146,6 +1413,11 @@
     maxSel: () => maxBySteps('selected', false),
     applyBuff: () => applyBuff(false),
     resetBuffs, buffRange, buffSpeed, buffDamage, listFields,
+    nuke: nukeEnemies,
+    applyFps: () => setFps(cfg.fps),
+    resetFps: () => setFps(60),
+    saveSnap, restoreSnap, resetStats, killAll,
+    saveProfile, loadProfile, deleteProfile, listProfiles,
     deleteAll, deleteSelected, deleteMatching,
     addTokens,
     answerNow: () => autoAnswer(false, true),
@@ -1193,6 +1465,7 @@
     const t = document.activeElement;
     if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable)) return;
     if (e.key === 'p' || e.key === 'P') return togglePanel();
+    if (e.key === 'k' || e.key === 'K') return killAll();
     if (e.key === 'F6') { e.preventDefault(); maxTowers(false); }
     if (e.key === 'F7') { e.preventDefault(); setTokens(cfg.tokenAmount); }
     if (e.key === 'F8') { e.preventDefault(); doScan(); }
@@ -1209,6 +1482,22 @@
     chosenEl.textContent = chosen || 'none: click a shop tile once';
     stepsEl.textContent = stepCount();
     const g = getGame();
+    const setText = (sel, v) => { const el = panel.querySelector(sel); if (el) el.textContent = v; };
+    const secs = Math.floor((Date.now() - statsStart) / 1000);
+    setText('[data-stat="time"]', `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`);
+    setText('[data-stat="steps"]', stepCount());
+    if (g) {
+      setText('[data-chip="tokens"]', fmt(g.state.tokens));
+      setText('[data-chip="health"]', fmt(g.state.health));
+      setText('[data-chip="round"]', g.state.round);
+      setText('[data-chip="towers"]', Array.isArray(g.towers) ? g.towers.length : '-');
+      setText('[data-chip="dps"]', fmt(dps));
+      setText('[data-stat="dps"]', fmt(dps));
+      setText('[data-stat="peak"]', fmt(peakDps));
+      setText('[data-stat="total"]', dmgStart === null ? '-' : fmt(g.state.totalDamage - dmgStart));
+      const en = enemyList(g);
+      setText('[data-stat="enemies"]', en ? en.length : 'not found');
+    }
     if (!g && !store) return;
     const parts = [];
     try {
@@ -1232,6 +1521,7 @@
   // up on every tick. a redux store (other pages) is picked up the same way
   let tries = 0;
   let seenGame = false;
+  let lastSkip = 0;
   toast('dolp loaded. press P', 'ok');
   setInterval(() => {
     if (!store) store = findStore();
@@ -1256,6 +1546,12 @@
     if (cfg.buffAuto) applyBuff(true);
     if (cfg.watchState && g) watchState(g); else prevState = null;
     if (cfg.autoAnswer) autoAnswer(true);
+    if (g && cfg.autoRevive && g.state.gameOver) {
+      g.setState({ gameOver: false, health: Math.max(1, Number(cfg.healthAmount) || 100) });
+    }
+    if (cfg.autoSkip && Date.now() - lastSkip > 1200) { lastSkip = Date.now(); skipQuestion(true); }
+    if (g && cfg.turbo) setFps(cfg.fps, true);
+    if (g) statsTick(g);
     refreshStatus();
   }, 500);
 })();

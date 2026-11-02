@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "deploy": "node src/deploy-commands.js",
-    "preview": "node src/preview.js"
+    "preview": "node src/preview.js",
+    "setup-once": "node src/setup-once.js"
   },
   "dependencies": {
     "discord.js": "^14.16.3",

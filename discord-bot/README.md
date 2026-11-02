@@ -23,3 +23,8 @@ npm start
 ## Host 24/7
 Deploy this folder with its Dockerfile to Fly.io, Railway or Render; set `DISCORD_TOKEN` and `CLIENT_ID` as secrets.
 The bot must stay running: the verify, alert and ticket buttons and Unverified auto-role all need it online.
+
+## One-time setup only (no hosting)
+Fill `DISCORD_TOKEN` and `GUILD_ID` in `.env`, then `npm run setup-once`. It builds everything and exits.
+Afterwards the verify / alert / ticket buttons won't respond unless the bot is running again
+(use Discord's built-in Rules Screening for verification if you don't want to host it).

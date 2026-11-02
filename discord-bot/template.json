@@ -1,33 +1,102 @@
 {
+  "brand": "RustyMadness",
+  "color": "#cd5c2c",
   "roles": [
-    { "name": "Admin", "color": "#e74c3c", "permissions": ["Administrator"], "hoist": true },
-    { "name": "Moderator", "color": "#3498db", "permissions": ["KickMembers", "BanMembers", "ManageMessages", "ModerateMembers"], "hoist": true },
-    { "name": "Member", "color": "#2ecc71" }
+    { "key": "div_staff", "name": "Staff", "divider": true },
+    { "key": "owner", "name": "Owner", "color": "#f1c40f", "hoist": true, "permissions": ["Administrator"] },
+    { "key": "admin", "name": "Admin", "color": "#e74c3c", "hoist": true, "permissions": ["ManageChannels", "ManageRoles", "ManageGuild", "ManageMessages", "ManageThreads", "ManageNicknames", "KickMembers", "BanMembers", "ModerateMembers", "MoveMembers", "MuteMembers", "DeafenMembers", "ViewAuditLog", "MentionEveryone", "CreateInstantInvite"] },
+    { "key": "moderator", "name": "Moderator", "color": "#3498db", "hoist": true, "permissions": ["KickMembers", "BanMembers", "ModerateMembers", "ManageMessages", "ManageThreads", "ManageNicknames", "MoveMembers", "MuteMembers", "ViewAuditLog"] },
+    { "key": "support", "name": "Support", "color": "#1abc9c", "hoist": true, "permissions": ["ModerateMembers", "ManageMessages", "ManageThreads", "MoveMembers"] },
+    { "key": "div_community", "name": "Community", "divider": true },
+    { "key": "vip", "name": "VIP", "color": "#9b59b6", "hoist": true, "permissions": ["PrioritySpeaker", "UseExternalEmojis", "UseExternalStickers", "ChangeNickname", "EmbedLinks", "AttachFiles"] },
+    { "key": "clanleader", "name": "Clan Leader", "color": "#e67e22", "hoist": true, "permissions": ["CreateInstantInvite"] },
+    { "key": "player", "name": "Player", "color": "#cd5c2c", "permissions": ["SendMessages", "SendMessagesInThreads", "ReadMessageHistory", "AddReactions", "EmbedLinks", "AttachFiles", "UseExternalEmojis", "ChangeNickname", "Connect", "Speak", "Stream", "UseVAD"] },
+    { "key": "div_alerts", "name": "Alerts", "divider": true },
+    { "key": "wipealerts", "name": "Wipe Alerts", "color": "#e67e22", "mentionable": true },
+    { "key": "eventalerts", "name": "Event Alerts", "color": "#f39c12", "mentionable": true },
+    { "key": "giveawayalerts", "name": "Giveaway Alerts", "color": "#2ecc71", "mentionable": true },
+    { "key": "div_status", "name": "Status", "divider": true },
+    { "key": "unverified", "name": "Unverified", "color": "#7f8c8d" },
+    { "key": "muted", "name": "Muted", "color": "#4f545c" }
   ],
   "categories": [
-    {
-      "name": "INFO",
-      "channels": [
-        { "name": "welcome", "type": "text", "readOnly": true },
-        { "name": "rules", "type": "text", "readOnly": true },
-        { "name": "announcements", "type": "text", "readOnly": true }
-      ]
-    },
-    {
-      "name": "GENERAL",
-      "channels": [
-        { "name": "general", "type": "text" },
-        { "name": "media", "type": "text" },
-        { "name": "General Voice", "type": "voice" }
-      ]
-    },
-    {
-      "name": "STAFF",
-      "staffOnly": true,
-      "channels": [
-        { "name": "staff-chat", "type": "text" },
-        { "name": "mod-log", "type": "text" }
-      ]
-    }
+    { "emoji": "☢️", "name": "The Gate", "access": "public", "channels": [
+      { "emoji": "🔥", "name": "welcome", "panel": "welcome", "topic": "Welcome to RustyMadness." },
+      { "emoji": "📜", "name": "the-rules", "panel": "rules", "topic": "Read these before you play." },
+      { "emoji": "✅", "name": "spawn-in", "panel": "verify", "topic": "Press the button to unlock the server." }
+    ]},
+    { "emoji": "📡", "name": "Server Intel", "access": "players", "readOnly": true, "channels": [
+      { "emoji": "📢", "name": "announcements" },
+      { "emoji": "🌐", "name": "connect-info", "panel": "info" },
+      { "emoji": "🗓️", "name": "wipe-schedule", "panel": "wipe" },
+      { "emoji": "🆕", "name": "patch-notes" },
+      { "emoji": "🏆", "name": "leaderboards" },
+      { "emoji": "🛒", "name": "vip-store-info" }
+    ]},
+    { "emoji": "💬", "name": "The Wasteland", "access": "players", "channels": [
+      { "emoji": "💬", "name": "general" },
+      { "emoji": "🎥", "name": "clips-and-fails" },
+      { "emoji": "🤣", "name": "memes" },
+      { "emoji": "🏠", "name": "base-showcase" },
+      { "emoji": "🔍", "name": "looking-for-squad" },
+      { "emoji": "💰", "name": "trading-post" },
+      { "emoji": "🤖", "name": "bot-commands" },
+      { "emoji": "🔔", "name": "get-alerts", "panel": "alerts", "readOnly": true }
+    ]},
+    { "emoji": "⚔️", "name": "War Room", "access": "players", "channels": [
+      { "emoji": "🔫", "name": "pvp-talk" },
+      { "emoji": "💣", "name": "raid-planning" },
+      { "emoji": "🧱", "name": "base-design" },
+      { "emoji": "🌾", "name": "farming-and-routes" },
+      { "emoji": "📈", "name": "wipe-strategy" },
+      { "emoji": "🏴", "name": "clan-recruitment" }
+    ]},
+    { "emoji": "🎪", "name": "Madness Events", "access": "players", "channels": [
+      { "emoji": "🎯", "name": "event-info", "readOnly": true },
+      { "emoji": "🏅", "name": "event-signups" },
+      { "emoji": "🎁", "name": "giveaways", "readOnly": true },
+      { "emoji": "📸", "name": "event-gallery" }
+    ]},
+    { "emoji": "🛠️", "name": "Help Desk", "access": "players", "channels": [
+      { "emoji": "🎫", "name": "open-a-ticket", "panel": "ticket_general", "ticket": true },
+      { "emoji": "🚨", "name": "report-a-player", "panel": "ticket_report", "ticket": true },
+      { "emoji": "⚖️", "name": "ban-appeals", "panel": "ticket_appeal", "ticket": true },
+      { "emoji": "🐞", "name": "bug-reports" },
+      { "emoji": "💡", "name": "suggestions" }
+    ]},
+    { "emoji": "🔊", "name": "Comms", "access": "players", "channels": [
+      { "type": "voice", "name": "🔊 Lobby" },
+      { "type": "voice", "name": "🎮 Squad Alpha", "limit": 6 },
+      { "type": "voice", "name": "🎮 Squad Bravo", "limit": 6 },
+      { "type": "voice", "name": "🎮 Squad Charlie", "limit": 6 },
+      { "type": "voice", "name": "🎮 Squad Delta", "limit": 6 },
+      { "type": "voice", "name": "👥 Duo Den", "limit": 2 },
+      { "type": "voice", "name": "🎵 Chill Zone" },
+      { "type": "voice", "name": "💤 AFK Bunker", "afk": true }
+    ]},
+    { "emoji": "🏴", "name": "Clan HQ", "access": "clan", "channels": [
+      { "emoji": "🏴", "name": "warlord-chat" },
+      { "emoji": "📋", "name": "alliances" },
+      { "type": "voice", "name": "🔊 War Council" }
+    ]},
+    { "emoji": "💎", "name": "Madlad Lounge", "access": "vip", "channels": [
+      { "emoji": "💎", "name": "vip-chat" },
+      { "emoji": "🎁", "name": "vip-perks", "readOnly": true },
+      { "emoji": "🗳️", "name": "vip-votes" },
+      { "type": "voice", "name": "💎 VIP Voice" }
+    ]},
+    { "emoji": "🔨", "name": "Staff Area", "access": "staff", "channels": [
+      { "emoji": "🔨", "name": "staff-chat" },
+      { "emoji": "⌨️", "name": "staff-commands" },
+      { "emoji": "📋", "name": "mod-log" },
+      { "emoji": "🎫", "name": "ticket-transcripts" },
+      { "type": "voice", "name": "🔊 Staff Voice" }
+    ]},
+    { "emoji": "👑", "name": "Admin Office", "access": "admin", "channels": [
+      { "emoji": "👑", "name": "admin-chat" },
+      { "emoji": "⚙️", "name": "server-config" },
+      { "emoji": "🔍", "name": "audit-log" },
+      { "emoji": "💳", "name": "donations" }
+    ]}
   ]
 }

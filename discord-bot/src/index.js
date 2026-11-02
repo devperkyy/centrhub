@@ -1,31 +1,44 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
-const { runSetup } = require('./setup');
+const { runSetup, findRole } = require('./setup');
+const { handleButton } = require('./buttons');
 
 if (!process.env.DISCORD_TOKEN) {
   console.error('Set DISCORD_TOKEN in .env');
   process.exit(1);
 }
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+// GuildMembers is a privileged intent: enable "Server Members Intent" in the developer portal.
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
 client.once('ready', () => console.log(`Logged in as ${client.user.tag}`));
 
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== 'setup') return;
+client.on('guildMemberAdd', async (member) => {
+  const role = findRole(member.guild, 'unverified');
+  if (role) await member.roles.add(role).catch((e) => console.error('Could not assign Unverified:', e.message));
+});
 
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: 'Only administrators can run this.', ephemeral: true });
-  }
-
-  await interaction.deferReply({ ephemeral: true });
-  const lines = [];
+client.on('interactionCreate', async (i) => {
   try {
-    await runSetup(interaction.guild, (l) => lines.push(l));
-    await interaction.editReply(`Setup complete:\n${lines.join('\n')}`.slice(0, 1900));
+    if (i.isButton()) return await handleButton(i);
+    if (!i.isChatInputCommand() || i.commandName !== 'setup') return;
+
+    if (!i.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      return i.reply({ content: 'Only administrators can run this.', ephemeral: true });
+    }
+    await i.deferReply({ ephemeral: true });
+    const lines = [];
+    try {
+      await runSetup(i.guild, client, (l) => lines.push(l));
+      const created = lines.filter((l) => l.startsWith('Created') || l.startsWith('Posted')).length;
+      await i.editReply(`Setup complete. ${created} item(s) created, ${lines.length - created} already existed.`);
+    } catch (err) {
+      console.error(err);
+      await i.editReply(`Setup failed: ${err.message}\nMake sure the bot's role is at the very top of the role list, then run /setup again. It picks up where it stopped.`);
+    }
   } catch (err) {
     console.error(err);
-    await interaction.editReply(`Setup failed: ${err.message}\n(Make sure the bot has Manage Roles + Manage Channels and its role is above the roles it creates.)`);
+    if (i.isRepliable() && !i.replied && !i.deferred) i.reply({ content: 'Something went wrong.', ephemeral: true }).catch(() => {});
   }
 });
 

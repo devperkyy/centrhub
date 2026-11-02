@@ -1,0 +1,33 @@
+{
+  "roles": [
+    { "name": "Admin", "color": "#e74c3c", "permissions": ["Administrator"], "hoist": true },
+    { "name": "Moderator", "color": "#3498db", "permissions": ["KickMembers", "BanMembers", "ManageMessages", "ModerateMembers"], "hoist": true },
+    { "name": "Member", "color": "#2ecc71" }
+  ],
+  "categories": [
+    {
+      "name": "INFO",
+      "channels": [
+        { "name": "welcome", "type": "text", "readOnly": true },
+        { "name": "rules", "type": "text", "readOnly": true },
+        { "name": "announcements", "type": "text", "readOnly": true }
+      ]
+    },
+    {
+      "name": "GENERAL",
+      "channels": [
+        { "name": "general", "type": "text" },
+        { "name": "media", "type": "text" },
+        { "name": "General Voice", "type": "voice" }
+      ]
+    },
+    {
+      "name": "STAFF",
+      "staffOnly": true,
+      "channels": [
+        { "name": "staff-chat", "type": "text" },
+        { "name": "mod-log", "type": "text" }
+      ]
+    }
+  ]
+}

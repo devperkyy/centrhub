@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test Site</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <span class="brand">● Test Site</span>
+      <div class="links">
+        <a href="#about">About</a>
+        <a href="#features">Features</a>
+        <a href="#contact">Contact</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">Quick demo</p>
+      <h1>A simple website,<br>hosted in minutes.</h1>
+      <p class="lede">This is a placeholder page spun up to prove hosting works end to end — edit the content, swap the colors, make it yours.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#features">See features</a>
+        <a class="btn btn-ghost" href="#contact">Get in touch</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="about" class="section">
+      <h2>About this page</h2>
+      <p>Everything here is plain HTML, CSS, and a tiny bit of JS — no build step, no framework. It's meant to be a starting point you can reshape into whatever the real site should be.</p>
+    </section>
+
+    <section id="features" class="section">
+      <h2>What's included</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Responsive layout</h3>
+          <p>Works from phone width up to desktop, no horizontal scrolling.</p>
+        </div>
+        <div class="card">
+          <h3>Light &amp; dark mode</h3>
+          <p>Follows your system theme automatically.</p>
+        </div>
+        <div class="card">
+          <h3>Zero dependencies</h3>
+          <p>Just static files — drop it anywhere that serves HTML.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact" class="section contact">
+      <h2>Say hello</h2>
+      <form id="contact-form" class="contact-form">
+        <input type="text" id="name" placeholder="Your name" required>
+        <input type="email" id="email" placeholder="Your email" required>
+        <textarea id="message" placeholder="Your message" rows="4" required></textarea>
+        <button type="submit" class="btn btn-primary">Send</button>
+      </form>
+      <p id="form-status" class="form-status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Built as a quick demo &middot; <span id="year"></span></p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
